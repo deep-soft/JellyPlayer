@@ -1,0 +1,332 @@
+# 2023-12-12 07:40
+#
+#
+name: act-release
+on:
+#  push:
+#    tags:
+#      - "v*"
+  workflow_dispatch:
+    inputs:
+      tauri-build-type:
+        description: tauri-build-type
+        type: choice
+        options:
+          - cargo
+          - tauri-build
+          - tauri-action
+        default: cargo
+        required: true
+      archive_ALL:
+        description: Archive ALL
+        type: boolean
+        default: false
+        required: true
+
+env:
+  TAG_NAME:                    "JellyPlayer"
+  TAG_VERSION:                 "JellyPlayer-v0.0.0"
+  TAG_BUILD:                   "-b"
+  TAG_REF:                     "0000000"
+  PROG_NAME:                   "JellyPlayer"
+  PROG_VERSION:                "v0.0.0"
+  VERSION:                     "0.0.0"
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    environment: TAURI
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+## -- read from toml - begin
+      - name: Read toml package.version
+        uses: deep-soft/toml-action@v1.0.2
+        id: read_toml_version
+        with:
+          file: 'src-tauri/Cargo.toml'
+          field: 'package.version'
+
+      - name: Set env.PROG_VERSION
+        shell: bash
+        run: |
+          echo "PROG_VERSION = ${{ env.PROG_VERSION }}"
+
+          echo "set PROG_VERSION with value from Cargo.toml"
+          _version_=${{ steps.read_toml_version.outputs.value }}
+          prog_version="v"$_version_
+
+          echo "PROG_VERSION = $prog_version"
+          echo "TAG_VERSION=${{ env.PROG_NAME }}-$prog_version"
+
+          echo "set env.PROG_VERSION with value from Cargo.toml"
+          echo "PROG_VERSION=$prog_version" >> $GITHUB_ENV
+          echo "VERSION=$_version_" >> $GITHUB_ENV
+          echo "TAG_VERSION=${{ env.PROG_NAME }}-$prog_version" >> $GITHUB_ENV
+
+      - name: Print env.PROG_VERSION
+        shell: bash
+        run: |
+          echo "show new value for env.PROG_VERSION"
+          echo "PROG_VERSION = ${{ env.PROG_VERSION }}"
+          echo "TAG_VERSION  = ${{ env.TAG_VERSION  }}"
+
+## -- read from toml - end
+
+# - get ref set build begin
+      - name: Get ref, set build version
+        shell: bash
+        run: |
+          _ref_all_=$(git log -1 --format='%H')
+          # _ref_=$(echo ${_ref_all_::7})
+          _date_=$(date +%Y%m%d)
+          _ref_org_=${{ env.TAG_REF }}
+          _ref_len_="${#_ref_org_}"
+          _ref_=$(echo ${_ref_all_::$_ref_len_})
+          echo "TAG_REF=$_ref_" >> $GITHUB_ENV
+          _build_=${{ env.TAG_BUILD }}-$_date_-$_ref_
+          echo "TAG_BUILD=$_build_" >> $GITHUB_ENV
+          echo "WORK_DIR=$(pwd)" >> $GITHUB_ENV
+          echo "TAG_DATE=$_date_" >> $GITHUB_ENV
+
+      - name: Print ref, build version
+        shell: bash
+        run: |
+          echo "REF: ${{ env.TAG_REF }}
+          echo "BLD: ${{ env.TAG_BUILD }}
+          echo "${{ env.TAG_NAME }}-${{ env.TAG_BUILD }}" > _tag_name_.txt
+# - get ref set build end
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        # You can remove libayatana-appindicator3-dev if you don't use the system tray feature.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev librsvg2-dev
+
+#      - name: Rust setup
+#        uses: dtolnay/rust-toolchain@stable
+#      - name: Rust cache
+#        uses: swatinem/rust-cache@v2
+#        with:
+#          workspaces: "./src-tauri -> target"
+
+      - name: Install Rust toolchain
+        uses: deep-soft/rust-toolchain@master
+        with:
+          toolchain: stable
+          #  Rustup toolchain specifier e.g. stable, nightly, 1.42.0
+          #  the default is to match the @rev as described above. When passing an explicit toolchain as an input instead of @rev, you'll want to use "rust-toolchain@master" as the revision of the action.
+          targets: ${{ matrix.job.target }}
+          #  Comma-separated string of additional targets
+          components: ''
+          #  Comma-separated string of additional components to install e.g. clippy, rustfmt
+
+      - uses: deep-soft/rust-cache@v2
+        #with:  prefix-key: ${{ matrix.job.os }}
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - uses: deep-soft/pnpm-action-setup@v2
+        name: Install pnpm
+        with:
+          version: 7
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - uses: deep-soft/cache@v3
+        name: Setup pnpm cache
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Sync node version and setup cache
+        uses: deep-soft/setup-node@v4
+        #node-version: "lts/*"
+        with:
+          node-version: "lts/*"
+          cache: "pnpm" # Set this to npm, yarn or pnpm.
+
+      - name: Install app dependencies and build web
+        # Remove `&& yarn build` if you build your frontend in `beforeBuildCommand`
+        run: |
+          pnpm install --no-frozen-lockfile && pnpm run build # Change this to npm, yarn or pnpm.
+
+      - name: Build the app with cargo - step 1
+        if: inputs.tauri-build-type == 'cargo'
+        continue-on-error: true
+        shell: bash
+        run: |
+          pwd
+          pnpm run tauri build
+
+      - name: Build the app with cargo - step 2
+        if: inputs.tauri-build-type == 'cargo'
+        continue-on-error: true
+        shell: bash
+        id: build_cargo
+        run: |
+          pwd
+          echo "ls -la"
+          ls -la || true;
+          echo "ls -la src-tauri/target/";
+          ls -la src-tauri/target/ || true;
+          echo "ls -la src-tauri/target/release/";
+          ls -la src-tauri/target/release/ || true;
+          echo "ls -la src-tauri/target/release/bundle";
+          ls -la src-tauri/target/release/bundle || true;
+          built_files=$(find src-tauri/target/release/bundle/ -type f \( \
+           -iname \jelly*.exe -o \
+           -iname \jelly*.msi -o \
+           -iname \jelly*.zip -o \
+           -iname \jelly*.deb -o \
+           -iname \jelly*.gz  -o \
+           -iname \jelly*.AppImage -o \
+           -iname \jelly*.dmg -o \
+           -iname \jelly*.app \))
+          #echo "build_cargo.artifacts=$built_files" >> $GITHUB_ENV
+          #echo "artifacts=$built_files" >> $GITHUB_OUTPUT
+          #$built_files_string=$(echo $built_files | tr '\n' ' ')
+          #echo "build_cargo.artifacts_string=$built_files_string" >> $GITHUB_ENV
+          built_files_string=$(echo $built_files | tr '//' '/')
+          echo "$built_files_string"
+          echo "$built_files" > '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files.txt'
+          cat '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files.txt' | sort | uniq > '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files-too.txt'
+          cat '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files-too.txt'
+          mv '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files-too.txt' '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files.txt'
+          echo "artifacts_string=$built_files_string" >> $GITHUB_ENV
+          echo "artifacts_string=$built_files_string" >> $GITHUB_OUTPUT
+
+      - name: print build_cargo.outputs
+        if: inputs.tauri-build-type == 'cargo'
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "tauri_build.outputs.artifacts_string=${{ steps.build_cargo.outputs.artifacts_string }}"
+
+      - name: Publish Release of pnpm run tauri build
+        if: inputs.tauri-build-type == 'cargo'
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@master
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}
+          filelist: ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files.txt
+          #files: |
+          #  ${{ steps.build_cargo.outputs.artifacts_string }}
+          #  ${{ env.artifacts_string }}
+          #  ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-files.txt
+
+      - name: Build the app with tauri-build
+        if: inputs.tauri-build-type == 'tauri-build'
+        continue-on-error: true
+        uses: deep-soft/tauri-build@outputs_string
+        id: tauri_build
+        with:
+          debug: true
+
+      - name: print tauri_build.outputs
+        if: inputs.tauri-build-type == 'tauri-build'
+        shell: bash
+        run: |
+          echo "tauri_build.outputs.artifacts=${{ steps.tauri_build.outputs.artifacts }}"
+          echo "tauri_build.outputs.artifacts_string=${{ steps.tauri_build.outputs.artifacts_string }}"
+          echo "id=${{ steps.tauri_build.id }}"
+
+      - name: Publish Release of tauri-build
+        if: inputs.tauri-build-type == 'tauri-build'
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}
+          files: |
+            ${{ join(fromJSON(steps.tauri_build.outputs.artifacts), '\n') }}
+            join(fromJSON(${{ steps.tauri_build.outputs.artifacts }}), '\n')
+            ${{ steps.tauri_build.outputs.artifacts_string }}
+
+      - name: Build the app with tauri-action
+        if: inputs.tauri-build-type == 'tauri-action'
+        continue-on-error: true
+        uses: deep-soft/tauri-action@dev
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }} # This only works if your workflow triggers on new tags.
+          releaseName: "App Name v__VERSION__" # tauri-action replaces \_\_VERSION\_\_ with the app version.
+          releaseBody: "See the assets to download and install this version."
+          releaseDraft: true
+          prerelease: false
+
+      - name: Publish Release macOS
+        if: inputs.tauri-build-type == 'tauri-action' && matrix.platform == 'macos-latest'
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}
+          files: |
+              src-tauri/target/release/bundle/macos/JellyPlayer.app
+              src-tauri/target/release/bundle/dmg/JellyPlayer_0.0.1_x64.dmg
+              src-tauri/target/release/bundle/macos/JellyPlayer.app.tar.gz
+
+      - name: Publish Release Ubuntu
+        if: inputs.tauri-build-type == 'tauri-action' && matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}
+          files: |
+              src-tauri/target/release/bundle/deb/jelly-player_0.0.1_amd64.deb
+              src-tauri/target/release/bundle/appimage/jelly-player_0.0.1_amd64.AppImage
+              src-tauri/target/release/bundle/appimage/jelly-player_0.0.1_amd64.AppImage.tar.gz
+
+      - name: Publish Release Windows
+        if: inputs.tauri-build-type == 'tauri-action' && matrix.platform == 'windows-latest'
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}
+          files: |
+              src-tauri/target/release/bundle/msi/JellyPlayer_0.0.1_x64_en-US.msi
+              src-tauri/target/release/bundle/nsis/JellyPlayer_0.0.1_x64-setup.exe
+              src-tauri/target/release/bundle/msi/JellyPlayer_0.0.1_x64_en-US.msi.zip
+              src-tauri/target/release/bundle/nsis/JellyPlayer_0.0.1_x64-setup.nsis.zip
+
+# zip release begin
+      - name: Create Archive ALL
+        if:  ${{ inputs.archive_ALL}}
+        uses: deep-soft/zip-release@v2
+        with:
+          type: 'zip'
+          filename: '${{ env.TAG_VERSION }}${{ env.TAG_BUILD }}-${{ matrix.platform }}-ALL.zip'
+          directory: '.'
+          path: '.'
+          exclusions: '*.git* /*node_modules/* .editorconfig'
+          # archive name is ${{ env.ZIP_RELEASE_ARCHIVE }}
+
+      - name: Publish Archive ALL
+        if:  ${{ inputs.archive_ALL}}
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_VERSION }}-ALL
+          files: |
+              ${{ env.ZIP_RELEASE_ARCHIVE }}
+# zip release end
