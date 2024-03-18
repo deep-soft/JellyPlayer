@@ -1,4 +1,3 @@
-/** @format */
 ::-webkit-scrollbar {
 	width: 14px;
 	background: $clr-background-dark;
@@ -48,13 +47,13 @@ body {
 
 .app-backdrop {
 	object-fit: cover;
-	width: calc(100% + 100px);
-	height: calc(100% + 100px);
+	width: calc(100% + 160px);
+	height: calc(100% + 160px);
 	position: absolute;
-	top: -50px;
-	left: -50px;
+	top: -80px;
+	left: -80px;
 	z-index: -2;
-	filter: blur(120px) saturate(130%) contrast(140%);
+	filter: blur(160px) saturate(130%) contrast(170%);
 	&-container {
 		position: fixed;
 		width: 100vw;
@@ -62,7 +61,7 @@ body {
 		left: 0;
 		top: 0;
 		z-index: -1;
-		filter: brightness(0.4);
+		filter: brightness(0.3);
 	}
 }
 
@@ -127,7 +126,7 @@ h1 {
 	width: 100%;
 	box-sizing: border-box;
 	min-height: 100vh;
-	padding: 0 1.6em;
+	padding: 1.6em;
 	&.padded-top {
 		padding-top: 4.4em;
 	}
@@ -149,9 +148,17 @@ h1 {
 }
 
 .material-symbols-rounded {
-	font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 25, "opsz" 40;
+	--fill: 0;
+	--wght: 300;
+	--grad: 25;
+	--opsz: 40;
+	
+	font-variation-settings: "FILL" var(--fill, 0), "wght" var(--wght, 300), "GRAD" var(--grad, 25), "opsz" var(--opsz, 40);
 	font-size: 1.1em;
 	transition: all $transition-time-default;
+	&.fill{
+		--fill: 1;
+	}
 }
 
 .audio-playing .scrollY {
@@ -196,6 +203,19 @@ h1 {
 	}
 }
 
+.animate-rotate{
+	animation: rotation linear 1s infinite;
+}
+
+@keyframes rotation {
+	0%{
+		transform: rotate(0deg);
+	}
+	100%{
+		transform: rotate(360deg);
+	}
+}
+
 @keyframes iconAnimation {
 	0% {
 		opacity: 1;
@@ -219,4 +239,37 @@ h1 {
 		align-items: center;
 		justify-content: center;
 	}
+	&-align-center {
+		align-items: center;
+	}
+	&-justify-spaced-between {
+		justify-content: space-between;
+	}
+}
+
+@keyframes pulse {
+	0% {
+		opacity: 0.1;
+	}
+	50% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0.1;
+	}
+}
+
+.gradient-text{
+	background: $clr-gradient-default;
+	color: transparent;
+	-webkit-background-clip: text;
+	background-clip: text;
+}
+
+.divider-circle{
+	width: 4px;
+	height: 4px;
+	aspect-ratio: 1;
+	border-radius: 10px;
+	background: white;
 }

@@ -8,7 +8,7 @@
 	},
 	"package": {
 		"productName": "JellyPlayer",
-		"version": "0.0.3-dev"
+		"version": "../package.json"
 	},
 	"tauri": {
 		"allowlist": {
@@ -19,6 +19,7 @@
 				"relaunchDangerousAllowSymlinkMacos": false
 			},
 			"window": {
+				"all": true,
 				"setFullscreen": true
 			},
 			"shell": {
@@ -27,12 +28,7 @@
 			"http": {
 				"all": true,
 				"request": true,
-				"scope": [
-					"http://**",
-					"http://*",
-					"https://**",
-					"https://*"
-				]
+				"scope": ["http://**", "http://*", "https://**", "https://*"]
 			}
 		},
 		"bundle": {
@@ -51,7 +47,7 @@
 				"icons/icon.ico"
 			],
 			"identifier": "com.jellyplayer.prayag17",
-			"longDescription": "A Modern Jellyfin Client for Jellyfin",
+			"longDescription": "A modern desktop client for Jellyfin",
 			"macOS": {
 				"entitlements": null,
 				"exceptionDomain": "",
@@ -60,7 +56,7 @@
 				"signingIdentity": null
 			},
 			"resources": [],
-			"shortDescription": "A Modern Jellyfin Client for Jellyfin",
+			"shortDescription": "JellyPlayer",
 			"targets": ["deb", "appimage", "nsis", "app", "dmg", "updater"],
 			"windows": {
 				"certificateThumbprint": null,

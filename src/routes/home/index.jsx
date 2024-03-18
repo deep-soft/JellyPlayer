@@ -1,6 +1,4 @@
-/** @format */
-
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -12,26 +10,26 @@ import Carousel from "../../components/carousel";
 import { Card } from "../../components/card/card";
 import { CardScroller } from "../../components/cardScroller/cardScroller";
 import { LatestMediaSection } from "../../components/layouts/homeSection/latestMediaSection";
-import { CarouselSkeleton } from "../../components/skeleton/carousel";
 import { CardsSkeleton } from "../../components/skeleton/cards";
+import { CarouselSkeleton } from "../../components/skeleton/carousel";
 
-import { getUserViewsApi } from "@jellyfin/sdk/lib/utils/api/user-views-api";
-import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
-import { getUserLibraryApi } from "@jellyfin/sdk/lib/utils/api/user-library-api";
 import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
 import { getTvShowsApi } from "@jellyfin/sdk/lib/utils/api/tv-shows-api";
+import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
+import { getUserLibraryApi } from "@jellyfin/sdk/lib/utils/api/user-library-api";
+import { getUserViewsApi } from "@jellyfin/sdk/lib/utils/api/user-views-api";
 
 import { useNavigate } from "react-router-dom";
 
-import { useBackdropStore } from "../../utils/store/backdrop";
+import { setBackdrop, useBackdropStore } from "../../utils/store/backdrop";
 
-import CarouselSlide from "../../components/carouselSlide";
 import { BaseItemKind, ItemFields } from "@jellyfin/sdk/lib/generated-client";
-import ErrorBoundary from "../../components/errorBoundary";
 import Typography from "@mui/material/Typography";
-import CarouselSlideError from "../../components/errors/carousel";
-import { useApi } from "../../utils/store/api";
 import { useSnackbar } from "notistack";
+import { ErrorBoundary } from "react-error-boundary";
+import CarouselSlide from "../../components/carouselSlide";
+import { ErrorNotice } from "../../components/notices/errorNotice/errorNotice";
+import { useApi } from "../../utils/store/api";
 
 const Home = () => {
 	const [api] = useApi((state) => [state.api]);
@@ -39,7 +37,7 @@ const Home = () => {
 	const user = useQuery({
 		queryKey: ["user"],
 		queryFn: async () => {
-			let usr = await getUserApi(api).getCurrentUser();
+			const usr = await getUserApi(api).getCurrentUser();
 			return usr.data;
 		},
 		networkMode: "always",
@@ -54,7 +52,7 @@ const Home = () => {
 			});
 			return libs.data;
 		},
-		enabled: !!user.data,
+		enabled: !!user.data && !!api.accessToken,
 		networkMode: "always",
 	});
 
@@ -78,7 +76,6 @@ const Home = () => {
 			return media.data;
 		},
 		enabled: !!user.data,
-		networkMode: "always",
 	});
 
 	const resumeItemsVideo = useQuery({
@@ -94,7 +91,7 @@ const Home = () => {
 			return resumeItems.data;
 		},
 		enabled: !!user.data,
-		networkMode: "always",
+		refetchOnMount: true
 	});
 
 	const resumeItemsAudio = useQuery({
@@ -110,7 +107,6 @@ const Home = () => {
 			return resumeItems.data;
 		},
 		enabled: !!user.data,
-		networkMode: "always",
 	});
 
 	const upNextItems = useQuery({
@@ -131,7 +127,7 @@ const Home = () => {
 			return upNext.data;
 		},
 		enabled: !!user.data,
-		networkMode: "always",
+		refetchOnMount: true
 	});
 
 	const [latestMediaLibs, setLatestMediaLibs] = useState([]);
@@ -141,26 +137,25 @@ const Home = () => {
 	const excludeTypes = ["boxsets", "playlists", "livetv", "channels"];
 
 	let tempData = [];
-	if (libraries.status == "success") {
-		libraries.data.Items.map((lib) => {
-			if (excludeTypes.includes(lib.CollectionType)) {
-				return;
-			}
-			tempData = latestMediaLibs;
-			if (
-				!tempData.some(
-					(el) =>
-						JSON.stringify(el) ==
-						JSON.stringify([lib.Id, lib.Name]),
-				)
-			) {
-				tempData.push([lib.Id, lib.Name]);
-				setLatestMediaLibs(tempData);
-			}
-		});
-	}
 
-	const [setAppBackdrop] = useBackdropStore((state) => [state.setBackdrop]);
+	useEffect(() => {
+		if (libraries.isSuccess) {
+			libraries.data.Items.map((lib) => {
+				if (excludeTypes.includes(lib.CollectionType)) {
+					return;
+				}
+				tempData = latestMediaLibs;
+				if (
+					!tempData.some(
+						(el) => JSON.stringify(el) === JSON.stringify([lib.Id, lib.Name]),
+					)
+				) {
+					tempData.push([lib.Id, lib.Name]);
+					setLatestMediaLibs(tempData);
+				}
+			});
+		}
+	}, [libraries.isSuccess]);
 
 	if (user.isPaused) {
 		user.refetch();
@@ -170,43 +165,38 @@ const Home = () => {
 	return (
 		<>
 			<main
-				className="scrollY home"
+				className="scrollY home padded-top"
 				style={{
 					flexGrow: 1,
-					// paddingBottom: "3em",
 					position: "relative",
 				}}
 			>
-				<ErrorBoundary fallback={<CarouselSlideError />}>
+				<ErrorBoundary FallbackComponent={ErrorNotice}>
 					{latestMedia.isPending ? (
 						<CarouselSkeleton />
 					) : (
-						<Carousel
-							content={latestMedia.data?.map((item) => (
-								<CarouselSlide
-									item={item}
-									key={item.Id}
-								/>
-							))}
-							onChange={(now) => {
-								if (latestMedia.isSuccess) {
-									if (
-										latestMedia.data[now]
-											.ParentBackdropImageTags
-									) {
-										setAppBackdrop(
-											`${api.basePath}/Items/${latestMedia.data[now].ParentBackdropItemId}/Images/Backdrop`,
-											latestMedia.data[now].Id,
-										);
-									} else {
-										setAppBackdrop(
-											`${api.basePath}/Items/${latestMedia.data[now].Id}/Images/Backdrop`,
-											latestMedia.data[now].Id,
-										);
+						latestMedia.data.length > 0 && (
+							<Carousel
+								content={latestMedia.data?.map((item) => (
+									<CarouselSlide item={item} key={item.Id} />
+								))}
+								onChange={(now) => {
+									if (latestMedia.isSuccess && latestMedia.data.length > 0) {
+										if (latestMedia.data[now]?.ParentBackdropImageTags) {
+											setBackdrop(
+												`${api.basePath}/Items/${latestMedia.data[now].ParentBackdropItemId}/Images/Backdrop`,
+												latestMedia.data[now].Id,
+											);
+										} else {
+											setBackdrop(
+												`${api.basePath}/Items/${latestMedia.data[now].Id}/Images/Backdrop`,
+												latestMedia.data[now].Id,
+											);
+										}
 									}
-								}
-							}}
-						/>
+								}}
+							/>
+						)
 					)}
 				</ErrorBoundary>
 
@@ -221,150 +211,95 @@ const Home = () => {
 					<ErrorBoundary
 						fallback={
 							<div className="error">
-								<Typography>
-									Error with Carousel
-								</Typography>
+								<Typography>Error with Carousel</Typography>
 							</div>
 						}
 					>
 						{libraries.isPending ? (
 							<CardsSkeleton />
 						) : (
-							<CardScroller
-								displayCards={4}
-								title="Libraries"
-							>
-								{libraries.status == "success" &&
-									libraries.data.Items.map(
-										(item) => {
-											return (
-												<Card
-													key={item.Id}
-													item={item}
-													cardTitle={
-														item.Name
-													}
-													imageType="Primary"
-													cardType="thumb"
-													disableOverlay
-													onClick={() =>
-														navigate(
-															`/library/${item.Id}`,
-														)
-													}
-													imageBlurhash={
-														!!item
-															.ImageBlurHashes
-															?.Primary &&
-														item
-															.ImageBlurHashes
-															?.Primary[
-															Object.keys(
-																item
-																	.ImageBlurHashes
-																	.Primary,
-															)[0]
-														]
-													}
-													overrideIcon={
-														item.CollectionType
-													}
-												></Card>
-											);
-										},
-									)}
+							<CardScroller displayCards={4} title="Libraries">
+								{libraries.status === "success" &&
+									libraries.data.Items.map((item) => {
+										return (
+											<Card
+												key={item.Id}
+												item={item}
+												cardTitle={item.Name}
+												imageType="Primary"
+												cardType="thumb"
+												disableOverlay
+												onClick={() => navigate(`/library/${item.Id}`)}
+												imageBlurhash={
+													!!item.ImageBlurHashes?.Primary &&
+													item.ImageBlurHashes?.Primary[
+														Object.keys(item.ImageBlurHashes.Primary)[0]
+													]
+												}
+												overrideIcon={item.CollectionType}
+											/>
+										);
+									})}
 							</CardScroller>
 						)}
 					</ErrorBoundary>
 					<ErrorBoundary
 						fallback={
 							<div className="error">
-								<Typography>
-									Error with Libraries
-								</Typography>
+								<Typography>Error with Libraries</Typography>
 							</div>
 						}
 					>
 						{upNextItems.isPending ? (
 							<CardsSkeleton />
-						) : upNextItems.isSuccess &&
-						  upNextItems.data.Items.length == 0 ? (
+						) : upNextItems.isSuccess && upNextItems.data.Items.length === 0 ? (
 							<></>
 						) : (
-							<CardScroller
-								displayCards={4}
-								title="Up Next"
-							>
+							<CardScroller displayCards={4} title="Up Next">
 								{upNextItems.data.Items.map((item) => {
 									return (
 										<Card
 											key={item.Id}
 											item={item}
 											cardTitle={
-												item.Type ==
-												BaseItemKind.Episode
+												item.Type === BaseItemKind.Episode
 													? item.SeriesName
 													: item.Name
 											}
 											imageType={
-												item.Type ==
-												BaseItemKind.Episode
+												item.Type === BaseItemKind.Episode
 													? "Primary"
-													: Object.keys(
-															item.ImageTags,
-													  ).includes(
-															"Thumb",
-													  )
-													? "Thumb"
-													: "Backdrop"
+													: Object.keys(item.ImageTags).includes("Thumb")
+													  ? "Thumb"
+													  : "Backdrop"
 											}
 											cardCaption={
-												item.Type ==
-												BaseItemKind.Episode
-													? item.ParentIndexNumber ==
-													  0
+												item.Type === BaseItemKind.Episode
+													? item.ParentIndexNumber === 0
 														? `${item.SeasonName} - ${item.Name}`
 														: item.IndexNumberEnd
-														? `${item.IndexNumber}-${item.IndexNumberEnd}. ${item.Name}`
-														: `${item.IndexNumber}. ${item.Name}`
-													: item.Type ==
-													  BaseItemKind.Series
-													? `${
-															item.ProductionYear
-													  } - ${
-															item.EndDate
-																? new Date(
-																		item.EndDate,
-																  ).toLocaleString(
-																		[],
-																		{
+														  ? `${item.IndexNumber}-${item.IndexNumberEnd}. ${item.Name}`
+														  : `${item.IndexNumber}. ${item.Name}`
+													: item.Type === BaseItemKind.Series
+													  ? `${item.ProductionYear} - ${
+																item.EndDate
+																	? new Date(item.EndDate).toLocaleString([], {
 																			year: "numeric",
-																		},
-																  )
-																: "Present"
-													  }`
-													: item.ProductionYear
+																	  })
+																	: "Present"
+														  }`
+													  : item.ProductionYear
 											}
 											cardType="thumb"
-											queryKey={[
-												"home",
-												"upNext",
-											]}
+											queryKey={["home", "upNext"]}
 											userId={user.data.Id}
 											imageBlurhash={
-												!!item
-													.ImageBlurHashes
-													?.Primary &&
-												item.ImageBlurHashes
-													?.Primary[
-													Object.keys(
-														item
-															.ImageBlurHashes
-															.Primary,
-													)[0]
+												!!item.ImageBlurHashes?.Primary &&
+												item.ImageBlurHashes?.Primary[
+													Object.keys(item.ImageBlurHashes.Primary)[0]
 												]
 											}
-										></Card>
+										/>
 									);
 								})}
 							</CardScroller>
@@ -373,187 +308,113 @@ const Home = () => {
 					<ErrorBoundary
 						fallback={
 							<div className="error">
-								<Typography>
-									Error with resumeItemsVideo
-								</Typography>
+								<Typography>Error with resumeItemsVideo</Typography>
 							</div>
 						}
 					>
 						{resumeItemsVideo.isPending ? (
 							<CardsSkeleton />
 						) : resumeItemsVideo.isSuccess &&
-						  resumeItemsVideo.data.Items.length == 0 ? (
+						  resumeItemsVideo.data.Items.length === 0 ? (
 							<></>
 						) : (
-							<CardScroller
-								displayCards={4}
-								title="Continue Watching"
-							>
-								{resumeItemsVideo.data.Items.map(
-									(item) => {
-										return (
-											<Card
-												key={item.Id}
-												item={item}
-												cardTitle={
-													item.Type ==
-													BaseItemKind.Episode
-														? item.SeriesName
-														: item.Name
-												}
-												imageType={
-													item.Type ==
-													BaseItemKind.Episode
-														? "Primary"
-														: Object.keys(
-																item.ImageTags,
-														  ).includes(
-																"Thumb",
-														  )
-														? "Thumb"
-														: "Backdrop"
-												}
-												cardCaption={
-													item.Type ==
-													BaseItemKind.Episode
-														? `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name}`
-														: item.Type ==
-														  BaseItemKind.Series
-														? `${
-																item.ProductionYear
-														  } - ${
+							<CardScroller displayCards={4} title="Continue Watching">
+								{resumeItemsVideo.data.Items.map((item) => {
+									return (
+										<Card
+											key={item.Id}
+											item={item}
+											cardTitle={
+												item.Type === BaseItemKind.Episode
+													? item.SeriesName
+													: item.Name
+											}
+											imageType={
+												item.Type === BaseItemKind.Episode
+													? "Primary"
+													: Object.keys(item.ImageTags).includes("Thumb")
+													  ? "Thumb"
+													  : "Backdrop"
+											}
+											cardCaption={
+												item.Type === BaseItemKind.Episode
+													? `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name}`
+													: item.Type === BaseItemKind.Series
+													  ? `${item.ProductionYear} - ${
 																item.EndDate
-																	? new Date(
-																			item.EndDate,
-																	  ).toLocaleString(
-																			[],
-																			{
-																				year: "numeric",
-																			},
-																	  )
+																	? new Date(item.EndDate).toLocaleString([], {
+																			year: "numeric",
+																	  })
 																	: "Present"
 														  }`
-														: item.ProductionYear
-												}
-												cardType="thumb"
-												queryKey={[
-													"home",
-													"resume",
-													"video",
-												]}
-												userId={
-													user.data.Id
-												}
-												imageBlurhash={
-													!!item
-														.ImageBlurHashes
-														?.Primary &&
-													item
-														.ImageBlurHashes
-														?.Primary[
-														Object.keys(
-															item
-																.ImageBlurHashes
-																.Primary,
-														)[0]
-													]
-												}
-											></Card>
-										);
-									},
-								)}
+													  : item.ProductionYear
+											}
+											cardType="thumb"
+											queryKey={["home", "resume", "video"]}
+											userId={user.data.Id}
+											imageBlurhash={
+												!!item.ImageBlurHashes?.Primary &&
+												item.ImageBlurHashes?.Primary[
+													Object.keys(item.ImageBlurHashes.Primary)[0]
+												]
+											}
+										/>
+									);
+								})}
 							</CardScroller>
 						)}
 					</ErrorBoundary>
 					<ErrorBoundary
 						fallback={
 							<div className="error">
-								<Typography>
-									Error with resumeItemsAudio
-								</Typography>
+								<Typography>Error with resumeItemsAudio</Typography>
 							</div>
 						}
 					>
 						{resumeItemsAudio.isPending ? (
 							<CardsSkeleton />
 						) : resumeItemsAudio.isSuccess &&
-						  resumeItemsAudio.data.Items.length == 0 ? (
+						  resumeItemsAudio.data.Items.length === 0 ? (
 							<></>
 						) : (
-							<CardScroller
-								displayCards={4}
-								title="Continue Listening"
-							>
-								{resumeItemsAudio.data.Items.map(
-									(item) => {
-										return (
-											<Card
-												key={item.Id}
-												item={item}
-												cardTitle={
-													item.Name
-												}
-												imageType={
-													item.Type ==
-													BaseItemKind.Episode
-														? "Primary"
-														: Object.keys(
-																item.ImageTags,
-														  ).includes(
-																"Thumb",
-														  )
-														? "Thumb"
-														: "Backdrop"
-												}
-												cardCaption={
-													item.ProductionYear
-												}
-												cardType="thumb"
-												queryKey={[
-													"home",
-													"resume",
-													"audio",
-												]}
-												userId={
-													user.data.Id
-												}
-												imageBlurhash={
-													item
-														.ImageBlurHashes
-														?.Primary &&
-													item
-														.ImageBlurHashes
-														?.Primary[
-														Object.keys(
-															item
-																.ImageBlurHashes
-																.Primary,
-														)[0]
-													]
-												}
-											></Card>
-										);
-									},
-								)}
+							<CardScroller displayCards={4} title="Continue Listening">
+								{resumeItemsAudio.data.Items.map((item) => {
+									return (
+										<Card
+											key={item.Id}
+											item={item}
+											cardTitle={item.Name}
+											imageType={
+												item.Type === BaseItemKind.Episode
+													? "Primary"
+													: Object.keys(item.ImageTags).includes("Thumb")
+													  ? "Thumb"
+													  : "Backdrop"
+											}
+											cardCaption={item.ProductionYear}
+											cardType="thumb"
+											queryKey={["home", "resume", "audio"]}
+											userId={user.data.Id}
+											imageBlurhash={
+												item.ImageBlurHashes?.Primary?.[
+													Object.keys(item.ImageBlurHashes.Primary)[0]
+												]
+											}
+										/>
+									);
+								})}
 							</CardScroller>
 						)}
 					</ErrorBoundary>
 					<ErrorBoundary
 						fallback={
 							<div className="error">
-								<Typography>
-									Error with LatestMediaSections
-								</Typography>
+								<Typography>Error with LatestMediaSections</Typography>
 							</div>
 						}
 					>
 						{latestMediaLibs.map((lib) => {
-							return (
-								<LatestMediaSection
-									key={lib[0]}
-									latestMediaLib={lib}
-								/>
-							);
+							return <LatestMediaSection key={lib[0]} latestMediaLib={lib} />;
 						})}
 					</ErrorBoundary>
 				</div>
@@ -562,4 +423,4 @@ const Home = () => {
 	);
 };
 
-export default Home;
+export default React.memo(Home);

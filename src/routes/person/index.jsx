@@ -1,35 +1,42 @@
-/** @format */
-import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
-import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useScroll } from "framer-motion";
+import useParallax from "../../utils/hooks/useParallax";
 
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import {
 	BaseItemKind,
 	ItemFields,
 	LocationType,
 } from "@jellyfin/sdk/lib/generated-client";
+import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
 import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
 import { getUserLibraryApi } from "@jellyfin/sdk/lib/utils/api/user-library-api";
-import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
 
 import { useQuery } from "@tanstack/react-query";
-import Hero from "../../components/layouts/item/hero";
 import { Card } from "../../components/card/card";
 
-import "./person.module.scss";
+import { Blurhash } from "react-blurhash";
+
+import LikeButton from "../../components/buttons/likeButton";
 import { ErrorNotice } from "../../components/notices/errorNotice/errorNotice";
-import { useBackdropStore } from "../../utils/store/backdrop";
 import { useApi } from "../../utils/store/api";
+import { setBackdrop } from "../../utils/store/backdrop";
+
+import meshBg from "../../assets/herobg.png";
+import ShowMoreText from "../../components/showMoreText";
+import "./person.module.scss";
+
+import IconLink from "../../components/iconLink";
 
 function TabPanel(props) {
 	const { children, value, index, ...other } = props;
@@ -68,7 +75,7 @@ const PersonTitlePage = () => {
 	const user = useQuery({
 		queryKey: ["user"],
 		queryFn: async () => {
-			let usr = await getUserApi(api).getCurrentUser();
+			const usr = await getUserApi(api).getCurrentUser();
 			return usr.data;
 		},
 		networkMode: "always",
@@ -104,7 +111,7 @@ const PersonTitlePage = () => {
 			});
 			return result.data;
 		},
-		enabled: item.isSuccess && item.data.Type == BaseItemKind.Person,
+		enabled: item.isSuccess && item.data.Type === BaseItemKind.Person,
 		networkMode: "always",
 	});
 	const personShows = useQuery({
@@ -121,7 +128,7 @@ const PersonTitlePage = () => {
 			});
 			return result.data;
 		},
-		enabled: item.isSuccess && item.data.Type == BaseItemKind.Person,
+		enabled: item.isSuccess && item.data.Type === BaseItemKind.Person,
 		networkMode: "always",
 	});
 
@@ -139,7 +146,7 @@ const PersonTitlePage = () => {
 			});
 			return result.data;
 		},
-		enabled: item.isSuccess && item.data.Type == BaseItemKind.Person,
+		enabled: item.isSuccess && item.data.Type === BaseItemKind.Person,
 		networkMode: "always",
 	});
 	const personPhotos = useQuery({
@@ -155,7 +162,7 @@ const PersonTitlePage = () => {
 			});
 			return result.data;
 		},
-		enabled: item.isSuccess && item.data.Type == BaseItemKind.Person,
+		enabled: item.isSuccess && item.data.Type === BaseItemKind.Person,
 		networkMode: "always",
 	});
 	const personEpisodes = useQuery({
@@ -173,7 +180,7 @@ const PersonTitlePage = () => {
 			});
 			return result.data;
 		},
-		enabled: item.isSuccess && item.data.Type == BaseItemKind.Person,
+		enabled: item.isSuccess && item.data.Type === BaseItemKind.Person,
 		networkMode: "always",
 	});
 
@@ -207,7 +214,7 @@ const PersonTitlePage = () => {
 		},
 	];
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (
 			personMovies.isSuccess &&
 			personShows.isSuccess &&
@@ -215,40 +222,35 @@ const PersonTitlePage = () => {
 			personPhotos.isSuccess &&
 			personEpisodes.isSuccess
 		) {
-			if (personMovies.data.TotalRecordCount != 0) {
+			if (personMovies.data.TotalRecordCount !== 0) {
 				setActivePersonTab(0);
-			} else if (personShows.data.TotalRecordCount != 0) {
+			} else if (personShows.data.TotalRecordCount !== 0) {
 				setActivePersonTab(1);
-			} else if (personBooks.data.TotalRecordCount != 0) {
+			} else if (personBooks.data.TotalRecordCount !== 0) {
 				setActivePersonTab(2);
-			} else if (personPhotos.data.TotalRecordCount != 0) {
+			} else if (personPhotos.data.TotalRecordCount !== 0) {
 				setActivePersonTab(3);
-			} else if (personEpisodes.data.TotalRecordCount != 0) {
+			} else if (personEpisodes.data.TotalRecordCount !== 0) {
 				setActivePersonTab(4);
 			}
 		}
+		setBackdrop("", "");
 	}, [
-		personMovies.isPending,
-		personShows.isPending,
-		personBooks.isPending,
-		personPhotos.isPending,
-		personEpisodes.isPending,
+		personMovies.isSuccess,
+		personShows.isSuccess,
+		personBooks.isSuccess,
+		personPhotos.isSuccess,
+		personEpisodes.isSuccess,
 	]);
-	const [setAppBackdrop] = useBackdropStore((state) => [state.setBackdrop]);
 
 	const [animationDirection, setAnimationDirection] = useState("forward");
 
-	useEffect(() => {
-		if (item.isSuccess) {
-			setAppBackdrop(
-				item.data.Type === BaseItemKind.MusicAlbum ||
-					item.data.Type === BaseItemKind.Episode
-					? `${api.basePath}/Items/${item.data.ParentBackdropItemId}/Images/Backdrop`
-					: `${api.basePath}/Items/${item.data.Id}/Images/Backdrop`,
-				item.data.Id,
-			);
-		}
-	}, [item.isSuccess]);
+	const pageRef = useRef(null);
+	const { scrollYProgress } = useScroll({
+		target: pageRef,
+		offset: ["start start", "60vh start"],
+	});
+	const parallax = useParallax(scrollYProgress, 50);
 
 	if (item.isPending) {
 		return (
@@ -265,6 +267,7 @@ const PersonTitlePage = () => {
 			</Box>
 		);
 	}
+
 	if (item.isSuccess) {
 		return (
 			<motion.div
@@ -279,22 +282,113 @@ const PersonTitlePage = () => {
 					duration: 0.25,
 					ease: "easeInOut",
 				}}
-				className="scrollY"
-				style={{
-					padding: "5em 2em 2em 1em",
-					display: "flex",
-					flexDirection: "column",
-					gap: "0.5em",
-				}}
+				className="scrollY padded-top item item-person flex flex-column"
+				ref={pageRef}
 			>
-				<Hero
-					item={item.data}
-					userId={user.data.Id}
-					queryKey={["item", id]}
-					disableInfoStrip
-					disablePlayButton
-					disableMarkAsPlayedButton
-				/>
+				<div className="item-hero flex flex-row">
+					<div className="item-hero-backdrop-container">
+						<motion.img
+							alt={item.data.Name}
+							src={meshBg}
+							className="item-hero-backdrop"
+							onLoad={(e) => {
+								e.currentTarget.style.opacity = 1;
+							}}
+							style={{
+								y: parallax,
+							}}
+						/>
+					</div>
+					<div
+						className="item-hero-image-container"
+						style={{
+							aspectRatio: item.data.PrimaryImageAspectRatio ?? 1,
+						}}
+					>
+						{Object.keys(item.data.ImageTags).includes("Primary") ? (
+							<>
+								<Blurhash
+									hash={
+										item.data.ImageBlurHashes.Primary[
+											item.data.ImageTags.Primary
+										]
+									}
+									className="item-hero-image-blurhash"
+								/>
+								<img
+									alt={item.data.Name}
+									src={api.getItemImageUrl(item.data.Id, "Primary", {
+										quality: 90,
+										tag: item.data.ImageTags.Primary,
+									})}
+									onLoad={(e) => {
+										e.currentTarget.style.opacity = 1;
+									}}
+									className="item-hero-image"
+								/>
+							</>
+						) : (
+							<></>
+						)}
+					</div>
+					<div className="item-hero-detail flex flex-column">
+						<Typography variant="h2">{item.data.Name}</Typography>
+
+						<LikeButton
+							itemName={item.data.Name}
+							itemId={item.data.Id}
+							queryKey={["item", id]}
+							isFavorite={item.data.UserData.IsFavorite}
+							userId={user.data.Id}
+						/>
+					</div>
+				</div>
+				<div className="item-detail">
+					<div style={{ width: "100%" }}>
+						<ShowMoreText
+							content={item.data.Overview ?? ""}
+							collapsedLines={4}
+						/>
+						<div
+							style={{
+								display: "flex",
+								gap: "0.6em",
+								alignSelf: "end",
+								marginTop: "1em",
+							}}
+						>
+							{item.data.ExternalUrls.map((url) => (
+								<IconLink url={url.Url} name={url.Name} />
+							))}
+						</div>
+					</div>
+					<Divider flexItem orientation="vertical" />
+					<div
+						style={{
+							width: "100%",
+						}}
+					>
+						{item.data.PremiereDate && (
+							<>
+								<Typography variant="h5">Born</Typography>
+								<Typography sx={{ opacity: 0.8 }}>
+									{new Date(item.data.PremiereDate).toDateString()}
+								</Typography>
+							</>
+						)}
+						{item.data.EndDate && (
+							<>
+								<Typography variant="h5" mt={2}>
+									Death
+								</Typography>
+								<Typography sx={{ opacity: 0.8 }}>
+									{new Date(item.data.EndDate).toDateString()}
+								</Typography>
+							</>
+						)}
+					</div>
+				</div>
+
 				<div className="item-detail-person-container">
 					<div className="item-detail-person-header">
 						<Tabs
@@ -309,16 +403,12 @@ const PersonTitlePage = () => {
 								setActivePersonTab(newVal);
 							}}
 						>
-							{personTabs.map((tab, index) => {
+							{personTabs.map((tab) => {
 								return (
 									<Tab
-										key={index}
+										key={tab.title}
 										label={tab.title}
-										disabled={
-											tab.data.data
-												?.TotalRecordCount ==
-											0
-										}
+										disabled={tab.data.data?.TotalRecordCount === 0}
 									/>
 								);
 							})}
@@ -328,33 +418,26 @@ const PersonTitlePage = () => {
 					<AnimatePresence>
 						{personTabs.map((tab, index) => {
 							return (
-								<TabPanel
-									value={activePersonTab}
-									index={index}
-									key={tab.title}
-								>
+								<TabPanel value={activePersonTab} index={index} key={tab.title}>
 									<motion.div
 										className={`item-detail-person-cards ${
-											tab.title == "Movies" ||
-											tab.title ==
-												"TV Shows" ||
-											tab.title == "Books"
-												? `col-8`
-												: `col-4`
+											tab.title === "Movies" ||
+											tab.title === "TV Shows" ||
+											tab.title === "Books"
+												? "col-8"
+												: "col-4"
 										}`}
 										key={tab.queryKey}
 										initial={{
 											opacity: 0,
 											transform:
-												animationDirection ==
-												"forward"
+												animationDirection === "forward"
 													? "translate(30px)"
 													: "translate(-30px)",
 										}}
 										animate={{
 											opacity: 1,
-											transform:
-												"translate(0px)",
+											transform: "translate(0px)",
 										}}
 										transition={{
 											duration: 0.2,
@@ -362,87 +445,51 @@ const PersonTitlePage = () => {
 										}}
 									>
 										{tab.data.isSuccess &&
-											tab.data.data.Items.map(
-												(
-													tabitem,
-													index,
-												) => {
-													return (
-														<Card
-															key={
-																tabitem.Id
-															}
-															item={
-																tabitem
-															}
-															cardTitle={
-																tabitem.Type ==
-																BaseItemKind.Episode
-																	? tabitem.SeriesName
-																	: tabitem.Name
-															}
-															imageType={
-																"Primary"
-															}
-															cardCaption={
-																tabitem.Type ==
-																BaseItemKind.Episode
-																	? `S${tabitem.ParentIndexNumber}:E${tabitem.IndexNumber} - ${tabitem.Name}`
-																	: tabitem.Type ==
-																	  BaseItemKind.Series
-																	? `${
-																			tabitem.ProductionYear
-																	  } - ${
-																			!!tabitem.EndDate
+											tab.data.data.Items.map((tabitem, index) => {
+												return (
+													<Card
+														key={tabitem.Id}
+														item={tabitem}
+														cardTitle={
+															tabitem.Type === BaseItemKind.Episode
+																? tabitem.SeriesName
+																: tabitem.Name
+														}
+														imageType={"Primary"}
+														cardCaption={
+															tabitem.Type === BaseItemKind.Episode
+																? `S${tabitem.ParentIndexNumber}:E${tabitem.IndexNumber} - ${tabitem.Name}`
+																: tabitem.Type === BaseItemKind.Series
+																  ? `${tabitem.ProductionYear} - ${
+																			tabitem.EndDate
 																				? new Date(
 																						tabitem.EndDate,
-																				  ).toLocaleString(
-																						[],
-																						{
-																							year: "numeric",
-																						},
-																				  )
+																				  ).toLocaleString([], {
+																						year: "numeric",
+																				  })
 																				: "Present"
 																	  }`
-																	: tabitem.ProductionYear
-															}
-															cardType={
-																tabitem.Type ==
-																BaseItemKind.Episode
-																	? "thumb"
-																	: "portrait"
-															}
-															queryKey={
-																tab.queryKey
-															}
-															userId={
-																user
-																	.data
-																	.Id
-															}
-															imageBlurhash={
-																!!tabitem
-																	.ImageBlurHashes
-																	?.Primary &&
-																tabitem
-																	.ImageBlurHashes
-																	?.Primary[
-																	Object.keys(
-																		tabitem
-																			.ImageBlurHashes
-																			.Primary,
-																	)[0]
-																]
-															}
-														/>
-													);
-												},
-											)}
+																  : tabitem.ProductionYear
+														}
+														cardType={
+															tabitem.Type === BaseItemKind.Episode
+																? "thumb"
+																: "portrait"
+														}
+														queryKey={tab.queryKey}
+														userId={user.data.Id}
+														imageBlurhash={
+															!!tabitem.ImageBlurHashes?.Primary &&
+															tabitem.ImageBlurHashes?.Primary[
+																Object.keys(tabitem.ImageBlurHashes.Primary)[0]
+															]
+														}
+													/>
+												);
+											})}
 									</motion.div>
 									{tab.data.isSuccess &&
-										tab.data.data
-											.TotalRecordCount >
-											24 && (
+										tab.data.data.TotalRecordCount > 24 && (
 											<Typography
 												variant="h6"
 												style={{

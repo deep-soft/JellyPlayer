@@ -1,26 +1,25 @@
-/** @format */
 import React, { useState } from "react";
 
-import Paper from "@mui/material/Paper";
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
 import MuiLink from "@mui/material/Link";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 
 import { Link } from "react-router-dom";
 
-import { useQuery } from "@tanstack/react-query";
 import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
+import { useQuery } from "@tanstack/react-query";
 
 import { getRuntimeMusic } from "../../../utils/date/time";
 
-import { MdiClockOutline } from "../../icons/mdiClockOutline";
-import { MdiAlbum } from "../../icons/mdiAlbum";
-
-import "./albumArtist.scss";
-import { useAudioPlayback } from "../../../utils/store/audioPlayback";
-import LikeButton from "../../buttons/likeButton";
 import { SortOrder } from "@jellyfin/sdk/lib/generated-client";
 import { useApi } from "../../../utils/store/api";
+import { useAudioPlayback } from "../../../utils/store/audioPlayback";
+import LikeButton from "../../buttons/likeButton";
+import PlayButton from "../../buttons/playButton";
+
+import TrackList from "../tracksList/index";
+import "./albumArtist.scss";
 
 export const ArtistAlbum = ({ user, album, boxProps }) => {
 	const [api] = useApi((state) => [state.api]);
@@ -38,8 +37,6 @@ export const ArtistAlbum = ({ user, album, boxProps }) => {
 
 		networkMode: "always",
 	});
-
-	const [imgLoaded, setImgLoaded] = useState(false);
 
 	const [
 		currentTrackItem,
@@ -79,58 +76,109 @@ export const ArtistAlbum = ({ user, album, boxProps }) => {
 				{!!album.ImageTags?.Primary && (
 					<div className="album-image">
 						<img
+							alt={album.Name}
 							src={`${api.basePath}/Items/${album.Id}/Images/Primary?fillHeight=532&fillWidth=532&quality=96`}
 							style={{
 								width: "100%",
 								height: "100%",
 								objectFit: "cover",
-								opacity: imgLoaded ? 1 : 0,
+								opacity: 0,
 								transition: "opacity 250ms",
 								position: "relative",
 								zIndex: 2,
 							}}
-							onLoad={() => setImgLoaded(true)}
+							onLoad={(e) => (e.currentTarget.style.opacity = 1)}
 						/>
 						<div className="album-image-icon-container">
-							<MdiAlbum
-								className="album-image-icon"
-								sx={{ fontSize: "6em" }}
-							/>
+							<span
+								className="material-symbols-rounded album-image-icon"
+								style={{ fontSize: "8em" }}
+							>
+								album
+							</span>
 						</div>
 					</div>
 				)}
-				<Stack>
-					<Typography
-						variant="h5"
-						style={{ opacity: `0.6`, mb: 1 }}
+				<div
+					className="flex flex-column"
+					style={{
+						alignItems: "flex-start",
+						justifyContent: "space-between",
+						padding: "1em 0",
+					}}
+				>
+					<div className="flex flex-column">
+						<Typography
+							variant="h4"
+							fontWeight={300}
+							style={{ opacity: "0.6", mb: 1 }}
+						>
+							{album.ProductionYear}
+						</Typography>
+						<MuiLink
+							component={Link}
+							to={`/musicalbum/${album.Id}`}
+							variant="h2"
+							color="inherit"
+							underline="hover"
+						>
+							{album.Name}
+						</MuiLink>
+					</div>
+					<div
+						className=" flex flex-row"
+						style={{
+							gap: "1em",
+							alignItems: "center",
+						}}
 					>
-						{album.ProductionYear}
-					</Typography>
-					<MuiLink
-						component={Link}
-						to={`/musicalbum/${album.Id}`}
-						variant="h3"
-						color="inherit"
-						underline="hover"
-					>
-						{album.Name}
-					</MuiLink>
-				</Stack>
+						<PlayButton
+							audio
+							itemId={album.Id}
+							itemType={album.Type}
+							itemUserData={album.UserData}
+							userId={user.Id}
+							buttonProps={{
+								color: "white",
+								style: {
+									color: "black ",
+								},
+							}}
+						/>
+
+						<LikeButton
+							itemName={album.Name}
+							key={album.Id}
+							queryKey={[
+								"item",
+								album.ParentBackdropItemId,
+								"artist",
+								"discography",
+							]}
+							isFavorite={album.UserData.IsFavorite}
+							itemId={album.Id}
+							itemType={album.Type}
+							itemUserData={album.UserData}
+							userId={user.Id}
+						/>
+					</div>
+				</div>
 			</div>
 
 			{albumTracks.isSuccess && (
-				<Paper
-					className="item-detail-album-tracks"
-					style={{
-						marginBottom: "1.2em",
-					}}
-				>
-					<div
+				<TrackList user={user} tracks={albumTracks.data.Items} />
+			)}
+		</div>
+	);
+};
+
+{
+	/* <div
 						key={0}
 						className="item-detail-album-track"
 						style={{
 							padding: "0.75em 0 ",
-							background: "hsl(256, 100%, 4%, 60%)",
+							background: "rgb(0 0 0 / 0.6)",
 						}}
 					>
 						<Typography
@@ -142,7 +190,7 @@ export const ArtistAlbum = ({ user, album, boxProps }) => {
 						>
 							#
 						</Typography>
-						<div></div>
+						<div />
 						<Typography
 							variant="h6"
 							style={{
@@ -152,16 +200,15 @@ export const ArtistAlbum = ({ user, album, boxProps }) => {
 						>
 							Name
 						</Typography>
-						<MdiClockOutline />
-					</div>
-					{albumTracks.data.Items.map((track, index) => {
+						<span className="material-symbols-rounded">schedule</span>
+					</div> 
+					{/*albumTracks.data.Items.map((track, index) => {
 						return (
 							<div
 								key={track.Id}
 								className={
-									currentTrackItem.Id == track.Id &&
-									currentTrackItem.ParentId ==
-										track.ParentId
+									currentTrackItem.Id === track.Id &&
+									currentTrackItem.ParentId === track.ParentId
 										? "item-detail-album-track playing"
 										: "item-detail-album-track"
 								}
@@ -173,28 +220,18 @@ export const ArtistAlbum = ({ user, album, boxProps }) => {
 										justifySelf: "end",
 									}}
 								>
-									{track.IndexNumber
-										? track.IndexNumber
-										: "-"}
+									{track.IndexNumber ? track.IndexNumber : "-"}
 								</Typography>
 
 								<LikeButton
 									itemId={track.Id}
-									isFavorite={
-										track.UserData?.IsFavorite
-									}
-									queryKey={[
-										"artist",
-										"album",
-										album.Id,
-									]}
+									isFavorite={track.UserData?.IsFavorite}
+									queryKey={["artist", "album", album.Id]}
 									userId={user.Id}
 									itemName={track.Name}
 									color={
-										currentTrackItem.Id ==
-											track.Id &&
-										currentTrackItem.ParentId ==
-											track.ParentId
+										currentTrackItem.Id === track.Id &&
+										currentTrackItem.ParentId === track.ParentId
 											? "hsl(337, 96%, 56%)"
 											: "white"
 									}
@@ -216,31 +253,23 @@ export const ArtistAlbum = ({ user, album, boxProps }) => {
 									>
 										{track.Name}
 									</Typography>
-									{track.AlbumArtist ==
-										"Various Artists" && (
+									{track.AlbumArtist === "Various Artists" && (
 										<Typography
 											variant="subtitle2"
 											style={{
 												opacity: 0.5,
 											}}
 										>
-											{track.ArtistItems.map(
-												(artist) =>
-													artist.Name,
-											).join(", ")}
+											{track.ArtistItems.map((artist) => artist.Name).join(
+												", ",
+											)}
 										</Typography>
 									)}
 								</div>
 								<Typography variant="subtitle1">
-									{getRuntimeMusic(
-										track.RunTimeTicks,
-									)}
+									{getRuntimeMusic(track.RunTimeTicks)}
 								</Typography>
 							</div>
 						);
-					})}
-				</Paper>
-			)}
-		</div>
-	);
-};
+					})*/
+}

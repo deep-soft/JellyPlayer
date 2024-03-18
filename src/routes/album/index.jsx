@@ -1,41 +1,52 @@
-/** @format */
-import React, { useEffect } from "react";
 import PropTypes from "prop-types";
+import React, { useEffect, useLayoutEffect, useRef } from "react";
 
 import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
-import Typography from "@mui/material/Typography";
+import Divider from "@mui/material/Divider";
 import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 
-import { useParams } from "react-router-dom";
+import { Link, NavLink, useParams } from "react-router-dom";
 
-import { motion } from "framer-motion";
+import { motion, useScroll } from "framer-motion";
+import useParallax from "../../utils/hooks/useParallax";
 
 import {
 	BaseItemKind,
 	ItemFields,
 	SortOrder,
 } from "@jellyfin/sdk/lib/generated-client";
+import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
+import { getLibraryApi } from "@jellyfin/sdk/lib/utils/api/library-api";
 import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
 import { getUserLibraryApi } from "@jellyfin/sdk/lib/utils/api/user-library-api";
-import { getLibraryApi } from "@jellyfin/sdk/lib/utils/api/library-api";
-import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
+
+import { Blurhash } from "react-blurhash";
 
 import { useQuery } from "@tanstack/react-query";
-import { MdiClockOutline } from "../../components/icons/mdiClockOutline";
 
-import { getRuntimeMusic } from "../../utils/date/time";
+import { endsAt, getRuntime, getRuntimeMusic } from "../../utils/date/time";
 
-import Hero from "../../components/layouts/item/hero";
 import { Card } from "../../components/card/card";
 import { CardScroller } from "../../components/cardScroller/cardScroller";
 
-import "./album.module.scss";
-import { ErrorNotice } from "../../components/notices/errorNotice/errorNotice";
-import { useBackdropStore } from "../../utils/store/backdrop";
 import LikeButton from "../../components/buttons/likeButton";
-import { useAudioPlayback } from "../../utils/store/audioPlayback";
+import MarkPlayedButton from "../../components/buttons/markPlayedButton";
+import PlayButton from "../../components/buttons/playButton";
+import TrackList from "../../components/layouts/tracksList";
+import { ErrorNotice } from "../../components/notices/errorNotice/errorNotice";
+import ShowMoreText from "../../components/showMoreText";
+
+import { getTypeIcon } from "../../components/utils/iconsCollection";
 import { useApi } from "../../utils/store/api";
+import { useAudioPlayback } from "../../utils/store/audioPlayback";
+import { useBackdropStore } from "../../utils/store/backdrop";
+import "./album.module.scss";
+
+import IconLink from "../../components/iconLink";
 
 function TabPanel(props) {
 	const { children, value, index, ...other } = props;
@@ -74,7 +85,7 @@ const MusicAlbumTitlePage = () => {
 	const user = useQuery({
 		queryKey: ["user"],
 		queryFn: async () => {
-			let usr = await getUserApi(api).getCurrentUser();
+			const usr = await getUserApi(api).getCurrentUser();
 			return usr.data;
 		},
 		networkMode: "always",
@@ -99,7 +110,7 @@ const MusicAlbumTitlePage = () => {
 	const similarItems = useQuery({
 		queryKey: ["item", id, "similarItem"],
 		queryFn: async () => {
-			let result = await getLibraryApi(api).getSimilarAlbums({
+			const result = await getLibraryApi(api).getSimilarAlbums({
 				userId: user.data.Id,
 				itemId: item.data.Id,
 				limit: 16,
@@ -122,7 +133,7 @@ const MusicAlbumTitlePage = () => {
 			});
 			return result.data;
 		},
-		enabled: item.isSuccess && item.data.Type == BaseItemKind.MusicAlbum,
+		enabled: item.isSuccess && item.data.Type === BaseItemKind.MusicAlbum,
 		networkMode: "always",
 	});
 
@@ -153,17 +164,21 @@ const MusicAlbumTitlePage = () => {
 
 	const [setAppBackdrop] = useBackdropStore((state) => [state.setBackdrop]);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (item.isSuccess) {
 			setAppBackdrop(
-				item.data.Type === BaseItemKind.MusicAlbum ||
-					item.data.Type === BaseItemKind.Episode
-					? `${api.basePath}/Items/${item.data.ParentBackdropItemId}/Images/Backdrop`
-					: `${api.basePath}/Items/${item.data.Id}/Images/Backdrop`,
+				`${api.basePath}/Items/${item.data.ParentBackdropItemId}/Images/Backdrop`,
 				item.data.Id,
 			);
 		}
 	}, [item.isSuccess]);
+
+	const pageRef = useRef(null);
+	const { scrollYProgress } = useScroll({
+		target: pageRef,
+		offset: ["start start", "60vh start"],
+	});
+	const parallax = useParallax(scrollYProgress, 50);
 
 	if (item.isPending || similarItems.isPending) {
 		return (
@@ -194,170 +209,228 @@ const MusicAlbumTitlePage = () => {
 					duration: 0.25,
 					ease: "easeInOut",
 				}}
-				className="scrollY"
-				style={{
-					padding: "5em 2em 2em 1em",
-					display: "flex",
-					flexDirection: "column",
-					gap: "0.5em",
-				}}
+				className="scrollY padded-top item item-album"
+				ref={pageRef}
 			>
-				<Hero
-					item={item.data}
-					userId={user.data.Id}
-					queryKey={["item", id]}
-					artists={item.data.ArtistItems}
-					albumBy={item.data.AlbumArtists[0]}
-					disableMarkAsPlayedButton
-					audioPlayButton
-					cardType="square"
-				/>
-				{musicTracks.isPending ? (
-					<></>
-				) : (
-					musicTracks.data.TotalRecordCount > 0 && (
-						<Paper
-							className="item-detail-album-tracks"
+				<div className="item-hero flex flex-row">
+					<div className="item-hero-backdrop-container">
+						{item.data.BackdropImageTags ? (
+							<motion.img
+								alt={item.data.Name}
+								src={api.getItemImageUrl(
+									item.data.ParentBackdropItemId,
+									"Backdrop",
+									{
+										tag: item.data.ParentBackdropImageTags[0],
+									},
+								)}
+								className="item-hero-backdrop"
+								onLoad={(e) => {
+									e.currentTarget.style.opacity = 1;
+								}}
+								style={{
+									y: parallax,
+								}}
+							/>
+						) : (
+							<></>
+						)}
+					</div>
+					<div
+						className="item-hero-image-container"
+						style={{
+							aspectRatio: item.data.PrimaryImageAspectRatio ?? 1,
+						}}
+					>
+						{Object.keys(item.data.ImageTags).includes("Primary") ? (
+							<>
+								<Blurhash
+									hash={
+										item.data.ImageBlurHashes.Primary[
+											item.data.ImageTags.Primary
+										]
+									}
+									className="item-hero-image-blurhash"
+								/>
+								<img
+									alt={item.data.Name}
+									src={api.getItemImageUrl(item.data.Id, "Primary", {
+										quality: 90,
+										tag: item.data.ImageTags.Primary,
+									})}
+									onLoad={(e) => {
+										e.currentTarget.style.opacity = 1;
+									}}
+									className="item-hero-image"
+								/>
+							</>
+						) : (
+							<></>
+						)}
+					</div>
+					<div className="item-hero-detail flex flex-column">
+						<Typography variant="h2">{item.data.Name}</Typography>
+
+						<Chip
+							label={item.data.AlbumArtist}
+							icon={
+								<span
+									className="material-symbols-rounded"
+									style={{
+										padding: "0.2em",
+
+										fontVariationSettings:
+											'"FILL" 1, "wght" 300, "GRAD" 25, "opsz" 40',
+									}}
+								>
+									artist
+								</span>
+							}
+							size="large"
+							sx={{
+								"& .MuiChip-label": {
+									marginLeft: 0.5,
+								},
+							}}
+						/>
+						<Stack
+							direction="row"
+							gap={2}
+							justifyItems="flex-start"
+							alignItems="center"
+						>
+							<Typography style={{ opacity: "0.8" }} variant="subtitle1">
+								{item.data.ProductionYear ?? ""}
+							</Typography>
+							<Typography style={{ opacity: "0.8" }} variant="subtitle1">
+								{item.data.ChildCount > 1
+									? `${item.data.ChildCount} Tracks`
+									: `${item.data.ChildCount}`}
+							</Typography>
+							{item.data.RunTimeTicks && (
+								<Typography style={{ opacity: "0.8" }} variant="subtitle1">
+									{getRuntime(item.data.RunTimeTicks)}
+								</Typography>
+							)}
+						</Stack>
+						<Typography variant="subtitle1" style={{ opacity: 0.8 }}>
+							{item.data.Genres.join(", ")}
+						</Typography>
+
+						<div className="item-hero-buttons-container flex flex-row">
+							<div className="flex flex-row">
+								<PlayButton
+									audio
+									itemId={item.data.Id}
+									itemType={item.data.Type}
+									itemUserData={item.data.UserData}
+									userId={user.data.Id}
+								/>
+							</div>
+							<div className="flex flex-row" style={{ gap: "1em" }}>
+								<LikeButton
+									itemName={item.data.Name}
+									itemId={item.data.Id}
+									queryKey={["item", id]}
+									isFavorite={item.data.UserData.IsFavorite}
+									userId={user.data.Id}
+								/>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div
+					className="item-detail"
+					style={{
+						marginBottom: "1em",
+					}}
+				>
+					<div style={{ width: "100%" }}>
+						<ShowMoreText
+							content={item.data.Overview ?? ""}
+							collapsedLines={4}
+						/>
+
+						<div
 							style={{
-								marginBottom: "1.2em",
+								display: "flex",
+								gap: "0.6em",
+								alignSelf: "start",
+								marginTop: "0.2em",
 							}}
 						>
-							<div
-								key={0}
-								className="item-detail-album-track"
-								style={{
-									padding: "0.75em 0 ",
-									background:
-										"hsl(256, 100%, 4%, 60%)",
-								}}
-							>
-								<Typography
-									variant="h6"
-									fontWeight={400}
-									style={{
-										justifySelf: "end",
-									}}
-								>
-									#
-								</Typography>
-								<div></div>
-								<Typography
-									variant="h6"
-									style={{
-										justifySelf: "start",
-									}}
-									fontWeight={400}
-								>
-									Name
-								</Typography>
-								<MdiClockOutline />
-							</div>
-							{musicTracks.data.Items.map(
-								(track, index) => {
-									return (
-										<div
-											key={track.Id}
-											className={
-												currentTrackItem.Id ==
-													track.Id &&
-												currentTrackItem.ParentId ==
-													track.ParentId
-													? "item-detail-album-track playing"
-													: "item-detail-album-track"
-											}
-											onClick={() =>
-												playTrack(index)
-											}
-										>
-											<Typography
-												variant="subtitle1"
-												style={{
-													justifySelf:
-														"end",
-												}}
+							{item.data.ExternalUrls.map((url) => (
+								<IconLink url={url.Url} name={url.Name} />
+							))}
+						</div>
+					</div>
+					<Divider flexItem orientation="vertical" />
+					<div
+						style={{
+							width: "100%",
+						}}
+					>
+						<div className="item-detail-cast">
+							{item.data.ArtistItems.length > 0 && (
+								<div className="item-detail-cast-container">
+									<Typography variant="h6" className="item-detail-cast-title">
+										Artists
+									</Typography>
+									<div className="item-detail-cast-grid">
+										{item.data.ArtistItems.map((artist) => (
+											<NavLink
+												className="item-detail-cast-card"
+												key={artist.Id}
+												to={`/artist/${artist.Id}`}
 											>
-												{!!track.IndexNumber
-													? track.IndexNumber
-													: "-"}
-											</Typography>
-
-											<LikeButton
-												itemId={track.Id}
-												isFavorite={
-													track.UserData
-														?.IsFavorite
-												}
-												queryKey={[
-													"item",
-													id,
-													"musicTracks",
-												]}
-												userId={
-													user.data.Id
-												}
-												itemName={
-													track.Name
-												}
-												color={
-													currentTrackItem.Id ==
-														track.Id &&
-													currentTrackItem.ParentId ==
-														track.ParentId
-														? "hsl(337, 96%, 56%)"
-														: "white"
-												}
-											/>
-
-											<div
-												style={{
-													display: "flex",
-													flexDirection:
-														"column",
-													width: "100%",
-												}}
-											>
-												<Typography
-													variant="subtitle1"
+												<div
 													style={{
-														justifySelf:
-															"start",
+														width: "5em",
+														position: "relative",
 													}}
-													fontWeight={
-														500
-													}
 												>
-													{track.Name}
-												</Typography>
-												{track.AlbumArtist ==
-													"Various Artists" && (
+													<img
+														alt={artist.Name}
+														src={api.getItemImageUrl(artist.Id, "Primary", {
+															quality: 80,
+															fillWidth: 200,
+															fillHeight: 200,
+														})}
+														style={{
+															position: "absolute",
+															top: 0,
+															left: 0,
+														}}
+														className="item-detail-cast-card-image"
+													/>
+
+													<div className="item-detail-cast-card-icon">
+														{getTypeIcon("Person")}
+													</div>
+												</div>
+												<div className="item-detail-cast-card-text">
+													<Typography variant="subtitle1">
+														{artist.Name}
+													</Typography>
 													<Typography
 														variant="subtitle2"
 														style={{
 															opacity: 0.5,
 														}}
 													>
-														{track.ArtistItems.map(
-															(
-																artist,
-															) =>
-																artist.Name,
-														).join(
-															", ",
-														)}
+														{artist.Role}
 													</Typography>
-												)}
-											</div>
-											<Typography variant="subtitle1">
-												{getRuntimeMusic(
-													track.RunTimeTicks,
-												)}
-											</Typography>
-										</div>
-									);
-								},
+												</div>
+											</NavLink>
+										))}
+									</div>
+								</div>
 							)}
-						</Paper>
-					)
+						</div>
+					</div>
+				</div>
+				{musicTracks.isSuccess && musicTracks.data.TotalRecordCount > 0 && (
+					<TrackList user={user.data.Id} tracks={musicTracks.data.Items} />
 				)}
 
 				{similarItems.data.TotalRecordCount > 0 && (
@@ -373,58 +446,36 @@ const MusicAlbumTitlePage = () => {
 									item={similar}
 									seriesId={similar.SeriesId}
 									cardTitle={
-										similar.Type ==
-										BaseItemKind.Episode
+										similar.Type === BaseItemKind.Episode
 											? similar.SeriesName
 											: similar.Name
 									}
 									imageType={"Primary"}
 									cardCaption={
-										similar.Type ==
-										BaseItemKind.Episode
+										similar.Type === BaseItemKind.Episode
 											? `S${similar.ParentIndexNumber}:E${similar.IndexNumber} - ${similar.Name}`
-											: similar.Type ==
-											  BaseItemKind.Series
-											? `${
-													similar.ProductionYear
-											  } - ${
-													!!similar.EndDate
-														? new Date(
-																similar.EndDate,
-														  ).toLocaleString(
-																[],
-																{
+											: similar.Type === BaseItemKind.Series
+											  ? `${similar.ProductionYear} - ${
+														similar.EndDate
+															? new Date(similar.EndDate).toLocaleString([], {
 																	year: "numeric",
-																},
-														  )
-														: "Present"
-											  }`
-											: similar.ProductionYear
+															  })
+															: "Present"
+												  }`
+											  : similar.ProductionYear
 									}
 									cardType={
-										similar.Type ==
-											BaseItemKind.MusicAlbum ||
-										similar.Type ==
-											BaseItemKind.Audio
+										similar.Type === BaseItemKind.MusicAlbum ||
+										similar.Type === BaseItemKind.Audio
 											? "square"
 											: "portrait"
 									}
-									queryKey={[
-										"item",
-										id,
-										"similarItem",
-									]}
+									queryKey={["item", id, "similarItem"]}
 									userId={user.data.Id}
 									imageBlurhash={
-										!!similar.ImageBlurHashes
-											?.Primary &&
-										similar.ImageBlurHashes
-											?.Primary[
-											Object.keys(
-												similar
-													.ImageBlurHashes
-													.Primary,
-											)[0]
+										!!similar.ImageBlurHashes?.Primary &&
+										similar.ImageBlurHashes?.Primary[
+											Object.keys(similar.ImageBlurHashes.Primary)[0]
 										]
 									}
 								/>

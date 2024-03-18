@@ -1,10 +1,7 @@
-/** @format */
-import React from "react";
 import PropTypes from "prop-types";
+import React from "react";
 
 import Box from "@mui/material/Box";
-
-import { MdiAccount } from "../icons/mdiAccount";
 
 import "./avatar.module.scss";
 
@@ -17,24 +14,17 @@ export const AvatarImage = ({ userId }) => {
 			<div
 				className="avatar-image"
 				style={{
-					backgroundImage:
-						"url('" +
-						api.basePath +
-						"/Users/" +
-						userId +
-						"/Images/Primary')",
+					backgroundImage: `url('${api.basePath}/Users/${userId}/Images/Primary')`,
 				}}
-			></div>
+			/>
 
 			<div className="avatar-image-icon-container">
-				<MdiAccount className="avatar-image-icon" />
+				<span className="material-symbols-rounded avatar-image-icon">
+					account_circle
+				</span>
 			</div>
 		</Box>
 	);
-};
-
-export const AvatarSideMenu = ({ userName }) => {
-	return <div></div>;
 };
 
 AvatarImage.propType = {

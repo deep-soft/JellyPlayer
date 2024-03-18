@@ -1,9 +1,8 @@
-/** @format */
-import React from "react";
-import Skeleton from "@mui/material/Skeleton";
-import Paper from "@mui/material/Paper";
 import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Skeleton from "@mui/material/Skeleton";
 import Typography from "@mui/material/Typography";
+import React from "react";
 import { theme } from "../../theme";
 export const CarouselSkeleton = () => {
 	return (
@@ -12,9 +11,10 @@ export const CarouselSkeleton = () => {
 			elevation={0}
 			sx={{
 				height: "70vh",
-				margin: "4.4em 1.6em 1.6em 1.6em",
+				margin: "0.6em 1.6em 1.6em 1.6em",
 				position: "relative",
-				background: theme.palette.primary.background.main,
+				background: "black",
+				border: "1px solid rgb(255 255 255 / 0.2)",
 				borderRadius: "10px",
 				overflow: "hidden",
 			}}
@@ -25,24 +25,32 @@ export const CarouselSkeleton = () => {
 						variant="text"
 						sx={{ fontSize: "8rem" }}
 						width={300}
-						animation="wave"
-					></Skeleton>
+						// animation="wave"
+					/>
 				</Typography>
-				<Typography variant="p" className="hero-carousel-text">
+				<Typography
+					variant="p"
+					className="hero-carousel-text"
+					style={{ display: "flex", flexDirection: "column" }}
+				>
 					<Skeleton
 						variant="text"
-						sx={{ fontSize: "3rem" }}
+						sx={{ fontSize: "2rem" }}
 						width={400}
-						animation="wave"
-					></Skeleton>
-				</Typography>
-				<Typography variant="p" className="hero-carousel-text">
+						// animation="wave"
+					/>
 					<Skeleton
 						variant="text"
-						sx={{ fontSize: "3rem" }}
+						sx={{ fontSize: "2rem" }}
 						width={400}
-						animation="wave"
-					></Skeleton>
+						// animation="wave"
+					/>
+					<Skeleton
+						variant="text"
+						sx={{ fontSize: "2rem" }}
+						width={400}
+						// animation="wave"
+					/>
 				</Typography>
 			</div>
 		</Paper>

@@ -1,17 +1,14 @@
-/** @format */
 import PropTypes from "prop-types";
 
-import React from "react";
+import React, { useEffect } from "react";
 
 import IconButton from "@mui/material/IconButton";
 
 import { getUserLibraryApi } from "@jellyfin/sdk/lib/utils/api/user-library-api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { pink } from "@mui/material/colors";
-import { MdiHeart } from "../icons/mdiHeart";
-import { MdiHeartOutline } from "../icons/mdiHeartOutline";
-import { useSnackbar } from "notistack";
 import CircularProgress from "@mui/material/CircularProgress";
+import { pink } from "@mui/material/colors";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSnackbar } from "notistack";
 
 import { useApi } from "../../utils/store/api";
 
@@ -21,94 +18,76 @@ const LikeButton = ({ itemId, isFavorite, queryKey, userId, itemName }) => {
 	const { enqueueSnackbar } = useSnackbar();
 
 	const handleLiking = async () => {
+		let result = null;
 		if (isFavorite) {
-			await getUserLibraryApi(api).unmarkFavoriteItem({
+			result = await getUserLibraryApi(api).unmarkFavoriteItem({
 				userId: userId,
 				itemId: itemId,
 			});
 		} else if (!isFavorite) {
-			await getUserLibraryApi(api).markFavoriteItem({
+			result = await getUserLibraryApi(api).markFavoriteItem({
 				userId: userId,
 				itemId: itemId,
 			});
 		}
+		return result.data;
 	};
 	const mutation = useMutation({
+		// mutationFn: async () => {
+		// 	new Promise((resolve, reject) => {
+		// 		setTimeout(() => {
+		// 			resolve("foo");
+		// 		}, 4000);
+		// 	});
+		// },
 		mutationFn: handleLiking,
 		onError: (error) => {
 			enqueueSnackbar(`${error}`, {
 				variant: "error",
 			});
-			enqueueSnackbar(
-				`An error occured while updating "${itemName}"`,
-				{
-					variant: "error",
-				},
-			);
+			enqueueSnackbar(`An error occured while updating "${itemName}"`, {
+				variant: "error",
+			});
 			console.error(error);
 		},
 		onSettled: async () => {
 			return await queryClient.invalidateQueries({
-				queryKey: queryKey,
+				queryKey,
 			});
 		},
 		mutationKey: ["likeButton", itemId],
 	});
 
 	return (
-		<div
+		<IconButton
+			onClick={(e) => {
+				if (!mutation.isPending) {
+					mutation.mutate();
+					e.stopPropagation();
+				}
+			}}
 			style={{
+				opacity: mutation.isPending ? 0.5 : 1,
 				transition: "opacity 250ms",
-				position: "relative",
-				display: "inline-flex",
 			}}
 		>
-			<CircularProgress
-				style={{
-					opacity: mutation.isPending ? 1 : 0,
-					transition: "opacity 200ms",
-				}}
-				thickness={2}
-			/>
-			<IconButton
-				onClick={(e) => {
-					if (!mutation.isPending) {
-						e.stopPropagation();
-						mutation.mutate();
-					}
-				}}
-				style={{
-					position: "absolute",
-					top: 0,
-					left: 0,
-					right: 0,
-					bottom: 0,
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					opacity: mutation.isPending ? 0.5 : 1,
-				}}
+			<div
+				className="material-symbols-rounded"
+				style={
+					isFavorite
+						? {
+								"--fill": mutation.isPending ? 0 : 1,
+								color: mutation.isPending ? "white" : pink.A700,
+						  }
+						: {
+								"--fill": mutation.isPending ? 1 : 0,
+								color: mutation.isPending ? pink.A700 : "white",
+						  }
+				}
 			>
-				<div
-					className="material-symbols-rounded"
-					style={
-						isFavorite
-							? {
-									fontVariationSettings:
-										'"FILL" 1, "wght" 300, "GRAD" 25, "opsz" 40',
-									color: pink[700],
-							  }
-							: {
-									fontVariationSettings:
-										'"FILL" 0, "wght" 300, "GRAD" 25, "opsz" 40',
-									color: "white",
-							  }
-					}
-				>
-					favorite
-				</div>
-			</IconButton>
-		</div>
+				favorite
+			</div>
+		</IconButton>
 	);
 };
 

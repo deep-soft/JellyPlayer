@@ -1,13 +1,10 @@
-/** @format */
 import React, { useEffect, useState } from "react";
 
-import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import InputAdornment from "@mui/material/InputAdornment";
+import TextField from "@mui/material/TextField";
 
 import { useBackdropStore } from "../../utils/store/backdrop";
-
-import { MdiMagnify } from "../../components/icons/mdiMagnify";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -16,13 +13,15 @@ import { EmptyNotice } from "../../components/notices/emptyNotice/emptyNotice";
 
 import useDebounce from "../../utils/hooks/useDebounce";
 
-import "./search.module.scss";
+import { BaseItemKind } from "@jellyfin/sdk/lib/generated-client";
 import { getItemsApi } from "@jellyfin/sdk/lib/utils/api/items-api";
 import { getPersonsApi } from "@jellyfin/sdk/lib/utils/api/persons-api";
-import { BaseItemKind } from "@jellyfin/sdk/lib/generated-client";
-import { CardScroller } from "../../components/cardScroller/cardScroller";
+import { getSearchApi } from "@jellyfin/sdk/lib/utils/api/search-api";
 import { Card } from "../../components/card/card";
+import { EpisodeCard } from "../../components/card/episodeCard";
+import { CardScroller } from "../../components/cardScroller/cardScroller";
 import { useApi } from "../../utils/store/api";
+import "./search.module.scss";
 
 const SearchPage = () => {
 	const [api] = useApi((state) => [state.api]);
@@ -33,7 +32,7 @@ const SearchPage = () => {
 	const user = useQuery({
 		queryKey: ["user"],
 		queryFn: async () => {
-			let usr = await getUserApi(api).getCurrentUser();
+			const usr = await getUserApi(api).getCurrentUser();
 			return usr.data;
 		},
 		networkMode: "always",
@@ -54,7 +53,7 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 	const series = useQuery({
@@ -69,7 +68,7 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 	const musicAlbum = useQuery({
@@ -84,7 +83,7 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 	const audio = useQuery({
@@ -99,7 +98,7 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 	const book = useQuery({
@@ -114,7 +113,7 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 	const musicArtists = useQuery({
@@ -129,7 +128,7 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 	const person = useQuery({
@@ -142,7 +141,21 @@ const SearchPage = () => {
 			});
 			return result.data;
 		},
-		enabled: user.isSuccess && Boolean(searchParam),
+		enabled: user.isSuccess,
+		cacheTime: 0,
+	});
+	const episodes = useQuery({
+		queryKey: ["search", "items", "Episodes", searchParam],
+		queryFn: async () => {
+			const result = await getSearchApi(api).get({
+				userId: user.data.Id,
+				searchTerm,
+				limit: itemLimit,
+				includeItemTypes: ["Episode"],
+			});
+			return result.data;
+		},
+		enabled: user.isSuccess,
 		cacheTime: 0,
 	});
 
@@ -193,12 +206,9 @@ const SearchPage = () => {
 									<CircularProgress
 										style={{
 											position: "absolute",
-											transition:
-												"opacity 250ms",
+											transition: "opacity 250ms",
 											opacity:
-												Boolean(
-													searchTerm,
-												) &&
+												Boolean(searchTerm) &&
 												(movies.isPending ||
 													series.isPending ||
 													audio.isPending ||
@@ -211,7 +221,7 @@ const SearchPage = () => {
 										}}
 										size={35}
 									/>
-									<MdiMagnify />
+									<span className="material-symbols-rounded">search</span>
 								</div>
 							</InputAdornment>
 						),
@@ -226,11 +236,7 @@ const SearchPage = () => {
 				}}
 			>
 				{movies.isSuccess && movies.data.Items.length > 0 && (
-					<CardScroller
-						title="Movies"
-						displayCards={8}
-						disableDecoration
-					>
+					<CardScroller title="Movies" displayCards={8} disableDecoration>
 						{movies.data.Items.map((item) => (
 							<Card
 								key={item.Id}
@@ -239,20 +245,12 @@ const SearchPage = () => {
 								imageType={"Primary"}
 								cardCaption={item.ProductionYear}
 								cardType="portrait"
-								queryKey={[
-									"search",
-									"items",
-									"Movie",
-									searchParam,
-								]}
+								queryKey={["search", "items", "Movie", searchParam]}
 								userId={user.data.Id}
 								imageBlurhash={
 									!!item.ImageBlurHashes?.Primary &&
 									item.ImageBlurHashes?.Primary[
-										Object.keys(
-											item.ImageBlurHashes
-												.Primary,
-										)[0]
+										Object.keys(item.ImageBlurHashes.Primary)[0]
 									]
 								}
 							/>
@@ -260,55 +258,52 @@ const SearchPage = () => {
 					</CardScroller>
 				)}
 				{series.isSuccess && series.data.Items.length > 0 && (
-					<CardScroller
-						title="TV Shows"
-						displayCards={8}
-						disableDecoration
-					>
+					<CardScroller title="TV Shows" displayCards={8} disableDecoration>
 						{series.data.Items.map((item, index) => (
 							<Card
 								key={item.Id}
 								item={item}
 								cardTitle={item.Name}
 								imageType={"Primary"}
-								cardCaption={`${
-									item.ProductionYear
-								} - ${
-									!!item.EndDate
-										? new Date(
-												item.EndDate,
-										  ).toLocaleString([], {
+								cardCaption={`${item.ProductionYear} - ${
+									item.EndDate
+										? new Date(item.EndDate).toLocaleString([], {
 												year: "numeric",
 										  })
 										: "Present"
 								}`}
 								cardType="portrait"
-								queryKey={[
-									"search",
-									"items",
-									"Series",
-									searchParam,
-								]}
+								queryKey={["search", "items", "Series", searchParam]}
 								userId={user.data.Id}
 								imageBlurhash={
 									!!item.ImageBlurHashes?.Primary &&
 									item.ImageBlurHashes?.Primary[
-										Object.keys(
-											item.ImageBlurHashes
-												.Primary,
-										)[0]
+										Object.keys(item.ImageBlurHashes.Primary)[0]
 									]
 								}
 							/>
 						))}
 					</CardScroller>
 				)}
+				{episodes.isSuccess && episodes.data.TotalRecordCount > 0 && (
+					<CardScroller title="Episodes" displayCards={4} disableDecoration>
+						{episodes.data.SearchHints.map((episode) => {
+							return (
+								<EpisodeCard
+									key={episode.Id}
+									item={episode}
+									cardTitle={episode.Series}
+									cardCaption={`S${episode.ParentIndexNumber}:E${episode.IndexNumber} - ${episode.Name}`}
+									queryKey={["search", "items", "Episodes", searchParam]}
+									userId={user.data.Id}
+									disableRunTime
+								/>
+							);
+						})}
+					</CardScroller>
+				)}
 				{audio.isSuccess && audio.data.Items.length > 0 && (
-					<CardScroller
-						title="Audio"
-						displayCards={8}
-						disableDecoration
-					>
+					<CardScroller title="Audio" displayCards={8} disableDecoration>
 						{audio.data.Items.map((item, index) => (
 							<Card
 								key={item.Id}
@@ -317,69 +312,43 @@ const SearchPage = () => {
 								imageType={"Primary"}
 								cardCaption={item.ProductionYear}
 								cardType="square"
-								queryKey={[
-									"search",
-									"items",
-									"Audio",
-									searchParam,
-								]}
+								queryKey={["search", "items", "Audio", searchParam]}
 								userId={user.data.Id}
 								imageBlurhash={
 									!!item.ImageBlurHashes?.Primary &&
 									item.ImageBlurHashes?.Primary[
-										Object.keys(
-											item.ImageBlurHashes
-												.Primary,
-										)[0]
+										Object.keys(item.ImageBlurHashes.Primary)[0]
 									]
 								}
 							/>
 						))}
 					</CardScroller>
 				)}
-				{musicAlbum.isSuccess &&
-					musicAlbum.data.Items.length > 0 && (
-						<CardScroller
-							title="Albums"
-							displayCards={8}
-							disableDecoration
-						>
-							{musicAlbum.data.Items.map((item, index) => (
-								<Card
-									key={item.Id}
-									item={item}
-									seriesId={item.SeriesId}
-									cardTitle={item.Name}
-									imageType={"Primary"}
-									cardCaption={item.AlbumArtist}
-									cardType={"square"}
-									queryKey={[
-										"search",
-										"items",
-										"MusicAlbum",
-										searchParam,
-									]}
-									userId={user.data.Id}
-									imageBlurhash={
-										!!item.ImageBlurHashes
-											?.Primary &&
-										item.ImageBlurHashes?.Primary[
-											Object.keys(
-												item.ImageBlurHashes
-													.Primary,
-											)[0]
-										]
-									}
-								/>
-							))}
-						</CardScroller>
-					)}
+				{musicAlbum.isSuccess && musicAlbum.data.Items.length > 0 && (
+					<CardScroller title="Albums" displayCards={8} disableDecoration>
+						{musicAlbum.data.Items.map((item, index) => (
+							<Card
+								key={item.Id}
+								item={item}
+								seriesId={item.SeriesId}
+								cardTitle={item.Name}
+								imageType={"Primary"}
+								cardCaption={item.AlbumArtist}
+								cardType={"square"}
+								queryKey={["search", "items", "MusicAlbum", searchParam]}
+								userId={user.data.Id}
+								imageBlurhash={
+									!!item.ImageBlurHashes?.Primary &&
+									item.ImageBlurHashes?.Primary[
+										Object.keys(item.ImageBlurHashes.Primary)[0]
+									]
+								}
+							/>
+						))}
+					</CardScroller>
+				)}
 				{book.isSuccess && book.data.Items.length > 0 && (
-					<CardScroller
-						title="Books"
-						displayCards={8}
-						disableDecoration
-					>
+					<CardScroller title="Books" displayCards={8} disableDecoration>
 						{book.data.Items.map((item, index) => (
 							<Card
 								key={item.Id}
@@ -389,68 +358,42 @@ const SearchPage = () => {
 								cardCaption={item.ProductionYear}
 								disableOverlay
 								cardType={"portrait"}
-								queryKey={[
-									"search",
-									"items",
-									"Book",
-									searchParam,
-								]}
+								queryKey={["search", "items", "Book", searchParam]}
 								userId={user.data.Id}
 								imageBlurhash={
 									!!item.ImageBlurHashes?.Primary &&
 									item.ImageBlurHashes?.Primary[
-										Object.keys(
-											item.ImageBlurHashes
-												.Primary,
-										)[0]
+										Object.keys(item.ImageBlurHashes.Primary)[0]
 									]
 								}
 							/>
 						))}
 					</CardScroller>
 				)}
-				{musicArtists.isSuccess &&
-					musicArtists.data.Items.length > 0 && (
-						<CardScroller
-							title="Artists"
-							displayCards={8}
-							disableDecoration
-						>
-							{musicArtists.data.Items.map((item) => (
-								<Card
-									key={item.Id}
-									item={item}
-									cardTitle={item.Name}
-									imageType={"Primary"}
-									disableOverlay
-									cardType={"square"}
-									queryKey={[
-										"search",
-										"items",
-										"MusicArtists",
-										searchParam,
-									]}
-									userId={user.data.Id}
-									imageBlurhash={
-										!!item.ImageBlurHashes
-											?.Primary &&
-										item.ImageBlurHashes?.Primary[
-											Object.keys(
-												item.ImageBlurHashes
-													.Primary,
-											)[0]
-										]
-									}
-								/>
-							))}
-						</CardScroller>
-					)}
+				{musicArtists.isSuccess && musicArtists.data.Items.length > 0 && (
+					<CardScroller title="Artists" displayCards={8} disableDecoration>
+						{musicArtists.data.Items.map((item) => (
+							<Card
+								key={item.Id}
+								item={item}
+								cardTitle={item.Name}
+								imageType={"Primary"}
+								disableOverlay
+								cardType={"square"}
+								queryKey={["search", "items", "MusicArtists", searchParam]}
+								userId={user.data.Id}
+								imageBlurhash={
+									!!item.ImageBlurHashes?.Primary &&
+									item.ImageBlurHashes?.Primary[
+										Object.keys(item.ImageBlurHashes.Primary)[0]
+									]
+								}
+							/>
+						))}
+					</CardScroller>
+				)}
 				{person.isSuccess && person.data.Items.length > 0 && (
-					<CardScroller
-						title="People"
-						displayCards={8}
-						disableDecoration
-					>
+					<CardScroller title="People" displayCards={8} disableDecoration>
 						{person.data.Items.map((item) => (
 							<Card
 								key={item.Id}
@@ -459,20 +402,12 @@ const SearchPage = () => {
 								imageType={"Primary"}
 								disableOverlay
 								cardType={"square"}
-								queryKey={[
-									"search",
-									"items",
-									"Person",
-									searchParam,
-								]}
+								queryKey={["search", "items", "Person", searchParam]}
 								userId={user.data.Id}
 								imageBlurhash={
 									!!item.ImageBlurHashes?.Primary &&
 									item.ImageBlurHashes?.Primary[
-										Object.keys(
-											item.ImageBlurHashes
-												.Primary,
-										)[0]
+										Object.keys(item.ImageBlurHashes.Primary)[0]
 									]
 								}
 							/>
@@ -488,23 +423,20 @@ const SearchPage = () => {
 				book.isSuccess &&
 				musicArtists.isSuccess &&
 				person.isSuccess &&
-				movies.data.Items.length == 0 &&
-				series.data.Items.length == 0 &&
-				audio.data.Items.length == 0 &&
-				musicAlbum.data.Items.length == 0 &&
-				book.data.Items.length == 0 &&
-				musicArtists.data.Items.length == 0 &&
-				person.data.Items.length == 0 && (
+				movies.data.Items.length === 0 &&
+				series.data.Items.length === 0 &&
+				audio.data.Items.length === 0 &&
+				musicAlbum.data.Items.length === 0 &&
+				book.data.Items.length === 0 &&
+				musicArtists.data.Items.length === 0 &&
+				person.data.Items.length === 0 &&
+				episodes.data.SearchHints.length === 0 && (
 					<div
 						style={{
 							height: "calc(100vh - 12em)",
 						}}
 					>
-						<EmptyNotice
-							extraMsg={
-								"Try using different search terms."
-							}
-						/>
+						<EmptyNotice extraMsg={"Try using different search terms."} />
 					</div>
 				)}
 		</div>
