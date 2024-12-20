@@ -1,148 +1,155 @@
-import React, { useEffect, useRef, useState } from "react";
-
-import { relaunch } from "@tauri-apps/api/process";
+import React, {
+	type MouseEventHandler,
+	useCallback,
+	useMemo,
+	type ReactNode,
+} from "react";
+import { useEffect, useState } from "react";
 
 import MuiAppBar from "@mui/material/AppBar";
 import Avatar from "@mui/material/Avatar";
-import Button from "@mui/material/Button";
-import Grow from "@mui/material/Grow";
 import IconButton from "@mui/material/IconButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Paper from "@mui/material/Paper";
-import Popper from "@mui/material/Popper";
-import Toolbar from "@mui/material/Toolbar";
-import Typography from "@mui/material/Typography";
 import useScrollTrigger from "@mui/material/useScrollTrigger";
 
-import { red } from "@mui/material/colors";
+import {
+	Link,
+	useLocation,
+	useNavigate,
+	useRouter,
+} from "@tanstack/react-router";
 
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-
-import { getUserApi } from "@jellyfin/sdk/lib/utils/api/user-api";
 import { getUserViewsApi } from "@jellyfin/sdk/lib/utils/api/user-views-api";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { delServer } from "../../utils/storage/servers";
-import { delUser } from "../../utils/storage/user";
-import { useDrawerStore } from "../../utils/store/drawer";
-import "./appBar.module.scss";
-
-import { EventEmitter as event } from "../../eventEmitter";
-import { useApi } from "../../utils/store/api";
+import { delUser } from "@/utils/storage/user";
+import "./appBar.scss";
 
 import { getTypeIcon } from "../utils/iconsCollection";
 
-import { Divider } from "@mui/material";
-import logo from "../../assets/icon.svg";
+import { useApiInContext } from "@/utils/store/api";
+import { useCentralStore } from "@/utils/store/central";
 import {
 	setSettingsDialogOpen,
 	setSettingsTabValue,
-} from "../../utils/store/settings";
+} from "@/utils/store/settings";
+import {
+	Divider,
+	Drawer,
+	List,
+	ListItem,
+	ListItemButton,
+	ListItemText,
+} from "@mui/material";
+import BackButton from "../buttons/backButton";
 
-const forwardRefNavLink = React.forwardRef({
-	displayName: "NavLink",
-	render: (props, ref) => (
-		<NavLink
-			ref={ref}
-			to={props.to}
-			className={({ isActive }) =>
-				`${props.className} ${isActive ? props.activeClassName : ""}`
-			}
-		>
-			{props.children}
-		</NavLink>
-	),
-});
+interface ListItemLinkProps {
+	icon?: ReactNode;
+	primary: string;
+	to: string;
+}
+
+function ListItemLink(props: ListItemLinkProps) {
+	const { icon, primary, to } = props;
+
+	return (
+		<li>
+			{/* @ts-ignore */}
+			<ListItem
+				component={Link}
+				activeClassName="active"
+				className="library-drawer-item"
+				to={to}
+			>
+				<ListItemButton
+					style={{
+						borderRadius: "100px",
+						gap: "0.85em",
+						color: "white",
+						textDecoration: "none",
+					}}
+				>
+					<div className="material-symbols-rounded">{icon}</div>
+					<ListItemText primary={primary} />
+				</ListItemButton>
+			</ListItem>
+		</li>
+	);
+}
+
+const MemoizeBackButton = React.memo(BackButton);
 
 export const AppBar = () => {
-	const [api] = useApi((state) => [state.api]);
+	const api = useApiInContext((s) => s.api);
+	const createApi = useApiInContext((s) => s.createApi);
+
 	const navigate = useNavigate();
 
 	const [display, setDisplay] = useState(false);
-	const [backButtonVisible, setBackButtonVisible] = useState(false);
 
 	const location = useLocation();
+	const router = useRouter();
 
-	const user = useQuery({
-		queryKey: ["user"],
-		queryFn: async () => {
-			const usr = await getUserApi(api).getCurrentUser();
-			return usr.data;
-		},
-		enabled: display,
-		networkMode: "always",
-	});
+	const [user, resetCurrentUser] = useCentralStore((s) => [
+		s.currentUser,
+		s.resetCurrentUser,
+	]);
 	const libraries = useQuery({
 		queryKey: ["libraries"],
 		queryFn: async () => {
+			if (!user?.Id || !api?.accessToken) {
+				return;
+			}
 			const libs = await getUserViewsApi(api).getUserViews({
-				userId: user.data.Id,
+				userId: user.Id,
 			});
 			return libs.data;
 		},
-		enabled: !!user.data && !!api.accessToken,
+		enabled: !!user?.Id && !!api?.accessToken,
 		networkMode: "always",
 	});
-	useEffect(() => {
-		if (user.isError) {
-			console.error(user.error);
-		}
-	}, [user]);
 
 	const trigger = useScrollTrigger({
 		disableHysteresis: true,
 		threshold: 20,
 	});
 
-	const [anchorEl, setAnchorEl] = useState(null);
+	const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
 	const openMenu = Boolean(anchorEl);
-	const handleMenuOpen = (event) => {
-		setAnchorEl(event.currentTarget);
-	};
-	const handleMenuClose = () => {
+	const handleMenuOpen: MouseEventHandler<HTMLButtonElement> = useCallback(
+		(event) => {
+			setAnchorEl(event.currentTarget);
+		},
+		[],
+	);
+	const handleMenuClose = useCallback(() => {
 		setAnchorEl(null);
-	};
-
+	}, []);
 	const queryClient = useQueryClient();
 
-	const [setDrawerOpen] = useDrawerStore((state) => [state.setOpen]);
-
-	const handleDrawerOpen = () => {
-		setDrawerOpen(true);
-	};
 	const handleLogout = async () => {
 		console.log("Logging out user...");
-		await api.logout();
+		await api?.logout();
+		createApi(api?.basePath ?? "", undefined);
+		console.log(api);
+		resetCurrentUser();
 		delUser();
 		sessionStorage.removeItem("accessToken");
-		event.emit("create-jellyfin-api", api.basePath);
+		await router.invalidate();
 		queryClient.clear();
 		setAnchorEl(null);
-		navigate("/login/index");
+		navigate({ to: "/login" });
 	};
-
-	const [librariesPopper, setLibrariesPopper] = useState(false);
-	const librariesText = useRef(null);
-
-	const handlePopper = (event) => {
-		if (librariesPopper) {
-			setLibrariesPopper(null);
-		} else {
-			setLibrariesPopper(event.currentTarget);
-		}
-	};
-
-	const [isBrowsingLibrary, setIsBrowsingLibrary] = useState(false);
 
 	useEffect(() => {
 		if (
 			location.pathname.includes("login") ||
 			location.pathname.includes("setup") ||
 			location.pathname.includes("server") ||
-			location.pathname.includes("player") ||
+			location.pathname === "/player" ||
 			location.pathname.includes("error") ||
 			location.pathname === "/"
 		) {
@@ -150,218 +157,92 @@ export const AppBar = () => {
 		} else {
 			setDisplay(true);
 		}
-
-		if (location.pathname === "/home") {
-			setBackButtonVisible(false);
-		} else {
-			setBackButtonVisible(true);
-		}
-
-		if (location.pathname.includes("library")) {
-			setIsBrowsingLibrary(true);
-		} else {
-			setIsBrowsingLibrary(false);
-		}
 	}, [location]);
+
+	const [showDrawer, setShowDrawer] = useState(false);
+
+	const appBarStyling = useMemo(() => {
+		return {
+			backgroundColor: "transparent",
+			paddingRight: "0 !important",
+		};
+	}, []);
+	const menuStyle = useMemo(() => {
+		return { mt: 2 };
+	}, []);
+
+	const drawerPaperProps = useMemo(() => {
+		return {
+			className: "glass library-drawer",
+			elevation: 6,
+		};
+	}, []);
+
+	const handleNavigateToSearch = useCallback(
+		() => navigate({ to: "/search", search: { query: "" } }),
+		[navigate],
+	);
+
+	const handleDrawerClose = useCallback(() => {
+		setShowDrawer(false);
+	}, []);
+
+	const handleDrawerOpen = useCallback(() => {
+		setShowDrawer(true);
+	}, []);
+
+	const handleNavigateToHome = useCallback(() => navigate({ to: "/home" }), []);
+	const handleNavigateToFavorite = useCallback(() => {
+		navigate({ to: "/favorite" });
+	}, []);
+
+	const menuButtonSx = useMemo(() => ({ p: 0 }), []);
 
 	if (!display) {
 		return <></>;
 	}
 	if (display) {
 		return (
-			<MuiAppBar
-				style={{
-					backgroundColor: "transparent",
-					paddingRight: "0 !important",
-				}}
-				className={trigger ? "appBar backdropVisible" : "appBar"}
-				elevation={trigger ? 4 : 0}
-				color="transparent"
-			>
-				<Toolbar
-					sx={{
-						display: "grid",
-						gap: "0.6em",
-						gridTemplateColumns: "30% 1fr 30%",
-					}}
+			<>
+				<MuiAppBar
+					style={appBarStyling}
+					className={
+						trigger
+							? "appBar flex flex-row flex-justify-spaced-between elevated"
+							: "appBar flex flex-row flex-justify-spaced-between"
+					}
+					elevation={0}
+					color="transparent"
 				>
-					<IconButton
-						onClick={() => navigate(-1)}
-						disabled={!backButtonVisible}
-						style={{
-							justifySelf: "left",
-						}}
-					>
-						<div className="material-symbols-rounded">arrow_back</div>
-					</IconButton>
-
-					<div
-						className="flex flex-row flex-center"
-						style={{
-							gap: "2.6em",
-						}}
-					>
-						<NavLink to="/home">
-							{({ isActive }) =>
-								isActive ? (
-									<Button
-										style={{
-											textTransform: "none",
-										}}
-										size="large"
-										className="appBar-text active"
-									>
-										<Typography variant="subtitle1" fontWeight={600}>
-											Home
-										</Typography>
-									</Button>
-								) : (
-									<Button
-										style={{
-											textTransform: "none",
-										}}
-										className="appBar-text"
-										size="large"
-										color="white"
-									>
-										<Typography variant="subtitle1" fontWeight={600}>
-											Home
-										</Typography>
-									</Button>
-								)
-							}
-						</NavLink>
-						<Button
-							variant="text"
-							// disableRipple
-							disableElevation
-							onClick={handlePopper}
-							style={{ textTransform: "none" }}
-							size="large"
-							disableFocusRipple={false}
-							color={isBrowsingLibrary ? "primary" : "white"}
-							className={
-								isBrowsingLibrary ? "appBar-text active" : "appBar-text"
-							}
-						>
-							<Typography variant="subtitle1" fontWeight={600}>
-								Libraries
-							</Typography>
-						</Button>
-						{/* <Typography
-							variant="subtitle1"
-							fontWeight={600}
-							onMouseEnter={popoverEnter}
-							onFocus={popoverEnter}
-							tabIndex={0}
-							className={
-								isBrowsingLibrary
-									? "appBar-text active"
-									: "appBar-text"
-							}
-							// onMouseLeave={popoverLeave}
-						></Typography> */}
-
-						<Popper
-							open={Boolean(librariesPopper)}
-							anchorEl={librariesPopper}
-							placement="bottom"
-							disablePortal
-							modifiers={[
-								{
-									name: "flip",
-									enabled: true,
-									options: {
-										altBoundary: true,
-										rootBoundary: "document",
-										padding: 8,
-									},
-								},
-								{
-									name: "preventOverflow",
-									enabled: true,
-									options: {
-										altAxis: true,
-										altBoundary: true,
-										tether: true,
-										rootBoundary: "document",
-										padding: 8,
-									},
-								},
-							]}
-							transition
-						>
-							{({ TransitionProps }) => (
-								<Grow
-									{...TransitionProps}
-									style={{
-										transformOrigin: "50% 0 0",
-									}}
-									timeout={250}
-								>
-									<Paper
-										sx={{
-											mt: "1.1em",
-											maxHeight: "72em",
-										}}
-										style={{
-											boxShadow:
-												"0px 5px 5px -3px rgba(0,0,0,0.2), 0px 8px 10px 1px rgba(0,0,0,0.14), 0px 3px 14px 2px rgba(0,0,0,0.12)",
-											overflow: "hidden",
-											borderRadius: "25px",
-										}}
-									>
-										<div className="appBar-library-scrollContainer">
-											{libraries.isPending
-												? "loading..."
-												: libraries.data.Items.map((library) => (
-														<NavLink
-															key={library.Id}
-															className="appBar-library"
-															to={`library/${library.Id}`}
-															style={{
-																borderRadius: "10px",
-															}}
-														>
-															{Object.keys(library.ImageTags).includes(
-																"Primary",
-															) ? (
-																<img
-																	alt={library.Name}
-																	src={`${api.basePath}/Items/${library.Id}/Images/Primary?quality=90&fillHeight=226&fillWidth=127`}
-																/>
-															) : (
-																<div className="appBar-library-icon">
-																	{" "}
-																	{getTypeIcon(library.CollectionType)}{" "}
-																	<Typography variant="h6">
-																		{library.Name}
-																	</Typography>
-																</div>
-															)}
-														</NavLink>
-												  ))}
-										</div>
-									</Paper>
-								</Grow>
-							)}
-						</Popper>
+					<div className="flex flex-row" style={{ gap: "0.6em" }}>
+						<IconButton onClick={handleDrawerOpen}>
+							<div className="material-symbols-rounded">menu</div>
+						</IconButton>
+						<MemoizeBackButton />
+						<IconButton onClick={handleNavigateToHome}>
+							<div
+								className={
+									location.pathname === "/home"
+										? "material-symbols-rounded fill"
+										: "material-symbols-rounded"
+								}
+							>
+								home
+							</div>
+						</IconButton>
 					</div>
 
-					<div
-						className="flex flex-row"
-						style={{ justifySelf: "right", gap: "0.6em" }}
-					>
-						<IconButton onClick={() => navigate("/search")}>
+					<div className="flex flex-row" style={{ gap: "0.6em" }}>
+						<IconButton onClick={handleNavigateToSearch}>
 							<div className="material-symbols-rounded">search</div>
 						</IconButton>
-						<IconButton onClick={() => navigate("/favorite")}>
+						<IconButton onClick={handleNavigateToFavorite}>
 							<div className="material-symbols-rounded">favorite</div>
 						</IconButton>
-						<IconButton sx={{ p: 0 }} onClick={handleMenuOpen}>
-							{user.isSuccess &&
-								(user.data.PrimaryImageTag === undefined ? (
-									<Avatar className="appBar-avatar" alt={user.data.Name}>
+						<IconButton sx={menuButtonSx} onClick={handleMenuOpen}>
+							{!!user?.Id &&
+								(user?.PrimaryImageTag === undefined ? (
+									<Avatar className="appBar-avatar" alt={user?.Name ?? "image"}>
 										<span className="material-symbols-rounded appBar-avatar-icon">
 											account_circle
 										</span>
@@ -369,8 +250,8 @@ export const AppBar = () => {
 								) : (
 									<Avatar
 										className="appBar-avatar"
-										src={`${api.basePath}/Users/${user.data.Id}/Images/Primary`}
-										alt={user.data.Name}
+										src={`${api?.basePath}/Users/${user?.Id}/Images/Primary`}
+										alt={user?.Name ?? "image"}
 									>
 										<span className="material-symbols-rounded appBar-avatar-icon">
 											account_circle
@@ -382,7 +263,7 @@ export const AppBar = () => {
 							anchorEl={anchorEl}
 							open={openMenu}
 							onClose={handleMenuClose}
-							sx={{ mt: 2 }}
+							sx={menuStyle}
 							disableScrollLock
 						>
 							<MenuItem
@@ -423,8 +304,93 @@ export const AppBar = () => {
 							</MenuItem>
 						</Menu>
 					</div>
-				</Toolbar>
-			</MuiAppBar>
+				</MuiAppBar>
+				<Drawer
+					open={showDrawer}
+					PaperProps={drawerPaperProps}
+					className="library-drawer"
+					onClose={handleDrawerClose}
+				>
+					<List>
+						<ListItem>
+							<ListItemButton
+								onClick={handleDrawerClose}
+								style={{
+									borderRadius: "100px",
+									gap: "0.85em",
+								}}
+							>
+								<span className="material-symbols-rounded">menu_open</span>
+								Close
+							</ListItemButton>
+						</ListItem>
+					</List>
+					<Divider variant="middle" />
+					<List>
+						<ListItemLink to="/home" icon="home" primary="Home" />
+						{libraries.isSuccess &&
+							libraries.data?.Items?.map((library) => (
+								<ListItemLink
+									key={library.Id}
+									to={`/library/${library.Id}`}
+									icon={
+										library.CollectionType &&
+										getTypeIcon(library.CollectionType)
+									}
+									primary={library.Name ?? "Library"}
+								/>
+							))}
+					</List>
+					<Divider variant="middle" />
+					<List>
+						<ListItem>
+							<ListItemButton
+								onClick={() => {
+									setSettingsDialogOpen(true);
+									setSettingsTabValue(1);
+								}}
+								style={{
+									borderRadius: "100px",
+									gap: "0.85em",
+								}}
+							>
+								<span className="material-symbols-rounded">settings</span>
+								Settings
+							</ListItemButton>
+						</ListItem>
+						<ListItem>
+							<ListItemButton
+								onClick={() => {
+									setSettingsDialogOpen(true);
+									setSettingsTabValue(2);
+								}}
+								style={{
+									borderRadius: "100px",
+									gap: "0.85em",
+								}}
+							>
+								<span className="material-symbols-rounded">dns</span>
+								Change Server
+							</ListItemButton>
+						</ListItem>
+						<ListItem>
+							<ListItemButton
+								onClick={() => {
+									setSettingsDialogOpen(true);
+									setSettingsTabValue(10);
+								}}
+								style={{
+									borderRadius: "100px",
+									gap: "0.85em",
+								}}
+							>
+								<span className="material-symbols-rounded">info</span>
+								About
+							</ListItemButton>
+						</ListItem>
+					</List>
+				</Drawer>
+			</>
 		);
 	}
 };

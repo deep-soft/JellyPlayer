@@ -1,0 +1,146 @@
+.library-list {
+	&-image {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		z-index: 1;
+		object-fit: cover;
+		&-container {
+			position: relative;
+			width: 4.5em;
+			height: 4.5em;
+			aspect-ratio: 1;
+			border-radius: $border-radius_04;
+			overflow: hidden;
+			box-shadow: 0 2px 7px rgb(0 0 0 / 0.2);
+		}
+	}
+	&-icon {
+		font-size: 3em;
+		fill: url(#clr-gradient-default) !important;
+		&-container {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			z-index: 0;
+			background: $clr-gradient-dark;
+		}
+	}
+}
+.library {
+	padding-left: 0 !important;
+	padding-right: 0 !important;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	&-grid {
+		--number-of-cols: 8;
+		display: grid;
+		grid-template-columns: repeat(var(--number-of-cols), minmax(0, 1fr));
+		justify-items: center;
+		align-items: start;
+	}
+	&-items {
+		height: fit-content;
+		overflow-y: auto;
+		overflow-x: hidden;
+		padding: 1.5em $page-margin;
+		padding-top: 4em;
+		&-header {
+			position: fixed;
+			top: 4.4em;
+			z-index: 10;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			height: fit-content;
+			left: 50%;
+			transform: translate(-50%);
+			border-radius: 100px;
+			overflow: hidden;
+			transition: $transition-time-default;
+			z-index: 1000;
+			&.scrolling {
+				background: rgb(0 0 0 / 0.4) !important;
+				box-shadow: 0 0 25px rgb(0 0 0 / 0.45);
+				top: 1em;
+			}
+		}
+		&-options {
+			padding: 0.5em 0.75em;
+			gap: 0.5em;
+			overflow: hidden;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+		}
+	}
+	&-filter {
+		width: 100%;
+		justify-content: space-between;
+		margin: 0 0.5em !important;
+		&-container {
+			margin-top: 0.75em;
+			width: 22em;
+			max-height: 32em;
+			background: rgb(0 0 0 / 0.65);
+			border-radius: $border-radius-default;
+			backdrop-filter: blur(10px);
+			overflow-y: overlay;
+		}
+		&-title {
+			justify-self: start;
+		}
+		&-accordian {
+			background: transparent !important;
+			margin: 0 !important;
+			box-shadow: none !important;
+		}
+	}
+	&-genre {
+		&-header {
+			display: flex;
+			align-items: center;
+			justify-content: flex-start;
+			gap: 0.5em;
+			position: relative;
+			margin-bottom: 0.25em !important;
+			&-decoration {
+				width: 1em;
+				height: 2px;
+				background: white;
+			}
+		}
+	}
+	// Fix card width with virtual rows
+	.card {
+		width: 100%;
+		height: fit-content;
+		margin: 0;
+	}
+	// Layout css for dynamic virtual rows
+	&-virtual-item {
+		width: 14%;
+		min-width: 0;
+		// flex: 0 0 0;
+		height: fit-content;
+		display: inline-flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		padding: 0.75em;
+		&-row {
+			display: flex;
+			flex-direction: row;
+			align-items: center;
+			justify-content: center;
+			flex-basis: 14%;
+		}
+	}
+}

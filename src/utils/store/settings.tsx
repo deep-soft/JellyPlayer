@@ -1,9 +1,13 @@
-import { create } from "zustand";
+import { shallow } from "zustand/shallow";
+import { createWithEqualityFn } from "zustand/traditional";
 
-const useSettingsStore = create(() => ({
-	dialogOpen: false,
-	tabValue: 0,
-}));
+const useSettingsStore = createWithEqualityFn(
+	() => ({
+		dialogOpen: false,
+		tabValue: 0,
+	}),
+	shallow,
+);
 
 const setDialogOpen = (dialog: boolean) =>
 	useSettingsStore.setState((state) => ({ ...state, dialogOpen: dialog }));

@@ -1,21 +1,26 @@
 import React from "react";
 
-import { Divider, LinearProgress, Skeleton } from "@mui/material";
+import { Skeleton } from "@mui/material";
+import { motion } from "framer-motion";
 
 const ItemSkeleton = () => {
 	return (
-		<div
+		<motion.div
 			className="item item-default scrollY padded-top flex flex-column"
 			style={{
 				width: "100vw",
 			}}
+			initial={{
+				opacity: 0,
+			}}
+			animate={{
+				opacity: 1,
+			}}
+			exit={{
+				opacity: 0,
+			}}
 		>
-			<div
-				className="item-hero flex flex-row"
-				style={{
-					height: "50vh",
-				}}
-			>
+			<div className="item-hero">
 				<div
 					className="item-hero-image-container"
 					style={{
@@ -89,7 +94,6 @@ const ItemSkeleton = () => {
 					<Skeleton variant="text" />
 					<Skeleton variant="text" />
 				</div>
-				<Divider flexItem orientation="vertical" />
 				<div
 					style={{
 						width: "100%",
@@ -117,7 +121,7 @@ const ItemSkeleton = () => {
 					/>
 				</div>
 			</div>
-		</div>
+		</motion.div>
 	);
 };
 

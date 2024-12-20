@@ -1,0 +1,121 @@
+.audio {
+    &-hidden {
+        transform: translateY(-100%);
+    }
+    &-info {
+        width: 100%;
+        padding: 4em;
+        gap: 0.5em;
+        display: flex;
+        flex-direction: column;
+        &-container {
+            display: flex;
+            gap: 0em;
+            align-items: center;
+            justify-content: flex-start;
+        }
+        &-image {
+            width: 100%;
+            aspect-ratio: 1;
+            height: 100%;
+            object-fit: cover;
+            &-container {
+                width: 25em;
+                aspect-ratio: 1;
+                position: relative;
+                border-radius: $border-radius-default;
+                overflow: hidden;
+            }
+            &-icon {
+                font-size: 4em;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100%;
+                background: rgb(255 255 255 / 0.2);
+            }
+        }
+        &-controls {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1em;
+        }
+    }
+    &-queue {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        align-items: center;
+        
+        margin-top: 2em;
+        &-track {
+            padding: 1em;
+            display: grid;
+            grid-template-columns: 3em 1fr 6em;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            gap: 1em;
+            .material-symbols-rounded{
+                cursor: grab;
+            }
+            &-info-name {
+                transition: $transition-time-fast;
+            }
+            &.active {
+                .audio-queue-track-info-name {
+                    color: $clr-accent-default;
+                    font-weight: 500;
+                }
+            }
+            &.dragging {
+                background: black;
+                border-radius: 10px;
+                width: calc(100% + 2em);
+                cursor: grabbing;
+            }
+        }
+    }
+    &-lyrics {
+        max-height: 40vh;
+        overflow: visible;
+        background: rgb(255 255 255 / 0.05);
+        // border: 1px solid rgb(255 255 255 / 0.2);
+        padding: 2em;
+        position: relative;
+        margin-bottom: 2em;
+        border-radius: 20px;
+        overscroll-behavior: contain;
+        &-line {
+            width: fit-content;
+            white-space: wrap;
+            text-align: center;
+            font-size: 1.5em;
+            opacity: 0.5;
+            transform: scale(1);
+            transition: transform $transition-time-default;
+            &[data-active-lyric="true"] {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+        &[data-has-synced-lyrics="false"] {
+            .audio-lyrics-line {
+                opacity: 1;
+            }
+        }
+        &-container {
+            display: flex;
+            flex-direction: column;
+            overflow-y: scroll;
+            height: calc(40vh - 4em);
+            width: 100%;
+            overflow-x: visible !important;
+            align-items: center;
+            position: relative;
+            top: 0;
+        }
+    }
+}

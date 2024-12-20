@@ -33,7 +33,7 @@ div::-webkit-scrollbar {
 }
 
 body {
-	font-family: "Noto Sans";
+	font-family: "Plus Jakarta Sans Variable",system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 	background: $clr-background-default;
 	margin: 0;
 	padding: 0;
@@ -46,6 +46,7 @@ body {
 }
 
 .app-backdrop {
+	transition: 1.2s;
 	object-fit: cover;
 	width: calc(100% + 160px);
 	height: calc(100% + 160px);
@@ -53,7 +54,7 @@ body {
 	top: -80px;
 	left: -80px;
 	z-index: -2;
-	filter: blur(160px) saturate(130%) contrast(170%);
+	filter: blur(160px) saturate(140%) contrast(200%);
 	&-container {
 		position: fixed;
 		width: 100vw;
@@ -61,7 +62,7 @@ body {
 		left: 0;
 		top: 0;
 		z-index: -1;
-		filter: brightness(0.3);
+		filter: brightness(0.5);
 	}
 }
 
@@ -86,14 +87,14 @@ body {
 }
 
 .fadeIn {
-	animation: 0.5s fadeIn forwards;
+	animation: 0.5s fadeInPage forwards;
 }
 
 .fadeOut {
-	animation: 0.5s fadeOut forwards;
+	animation: 0.5s fadeOutPage forwards;
 }
 
-@keyframes fadeIn {
+@keyframes fadeInPage {
 	from {
 		opacity: 0;
 		transform: translate(-20px, 0);
@@ -104,7 +105,7 @@ body {
 	}
 }
 
-@keyframes fadeOut {
+@keyframes fadeOutPage {
 	from {
 		opacity: 1;
 		transform: translate(0px, 0px);
@@ -126,15 +127,11 @@ h1 {
 	width: 100%;
 	box-sizing: border-box;
 	min-height: 100vh;
-	padding: 1.6em;
+	padding: ($page-margin - 1.2em) $page-margin;
+	scrollbar-gutter: stable;
 	&.padded-top {
 		padding-top: 4.4em;
 	}
-}
-
-.home {
-	padding-left: 0 !important;
-	padding-right: 14px !important;
 }
 
 .empty {
@@ -230,7 +227,7 @@ h1 {
 .flex {
 	display: flex;
 	&-row {
-		flex-direction: row;
+		flex-direction: row !important;
 	}
 	&-column {
 		flex-direction: column;
@@ -272,4 +269,37 @@ h1 {
 	aspect-ratio: 1;
 	border-radius: 10px;
 	background: white;
+}
+
+.react-multi-carousel-list{
+	overflow: visible !important;
+}
+
+.react-multi-carousel-item{
+	filter: brightness(0.4);
+	transition: filter 500ms;
+	&.react-multi-carousel-item--active{
+		filter: brightness(1);	
+	}
+}
+
+@function neg($var) {
+	@return $var * -1;
+}
+
+.fullWidth {
+	width: 100%;
+}
+
+.glass {
+	background: rgb(0 0 0 / 0.3) !important;
+	backdrop-filter: blur(40px);
+}
+
+.opacity-07{
+	opacity: 0.7;
+}
+
+a {
+	color: $clr-accent-default;
 }

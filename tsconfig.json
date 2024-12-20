@@ -1,11 +1,17 @@
 {
   "compilerOptions": {
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    },
     "target": "ESNext", // Specify ECMAScript target version
     "lib": [
       "dom",
       "dom.iterable",
       "esnext"
     ],
+    "baseUrl": ".",
     "checkJs": true,
     "allowJs": true, // Allow JavaScript files to be compiled
     "skipLibCheck": true, // Skip type checking of all declaration files
@@ -28,9 +34,11 @@
   },
   "include": [
     "src/**/*" // *** The files TypeScript should type check ***
-  ],
+,
+"src/routes/_api/player/photos/.tsx"
+],
   "exclude": [
     "node_modules",
     "build"
-  ] // *** The files to not type check ***
+  ]
 }

@@ -1,3 +1,7 @@
+import useSettingsStore, {
+	setSettingsDialogOpen,
+	setSettingsTabValue,
+} from "@/utils/store/settings";
 import {
 	Button,
 	Chip,
@@ -6,49 +10,42 @@ import {
 	DialogContent,
 	DialogTitle,
 	Fab,
-	FormControlLabel,
 	IconButton,
-	LinearProgress,
 	Link,
 	Skeleton,
-	Switch,
 	Tab,
 	Tabs,
 	TextField,
 	Typography,
-	styled,
-	withStyles,
 } from "@mui/material";
-import { AnimatePresence, motion, transform } from "framer-motion";
-import React, { useEffect, useState } from "react";
-import useSettingsStore, {
-	setSettingsDialogOpen,
-	setSettingsTabValue,
-} from "../../utils/store/settings";
+import { AnimatePresence, motion } from "framer-motion";
+import React, { useState, useMemo, useCallback } from "react";
 
-import logo from "../../assets/logoBlack.png";
+import logo from "@/assets/logo.png";
 
+import { jellyfin, useApiInContext } from "@/utils/store/api";
+import { useCentralStore } from "@/utils/store/central";
 import { getSystemApi } from "@jellyfin/sdk/lib/utils/api/system-api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createApi, useApi } from "../../utils/store/api";
-import { useCentralStore } from "../../utils/store/central";
-import "./settings.module.scss";
+import "./settings.scss";
 
-import { RecommendedServerInfo } from "@jellyfin/sdk";
-import { LoadingButton } from "@mui/lab";
-import { red, yellow } from "@mui/material/colors";
-import { relaunch } from "@tauri-apps/api/process";
-import { checkUpdate, installUpdate } from "@tauri-apps/api/updater";
-import { enqueueSnackbar, useSnackbar } from "notistack";
-import { useNavigate } from "react-router-dom";
 import {
 	delServer,
 	getAllServers,
 	getDefaultServer,
 	setDefaultServer,
 	setServer,
-} from "../../utils/storage/servers";
-import { delUser } from "../../utils/storage/user";
+} from "@/utils/storage/servers";
+import { allSettings } from "@/utils/storage/settings";
+import { delUser } from "@/utils/storage/user";
+import type { RecommendedServerInfo } from "@jellyfin/sdk";
+import { LoadingButton } from "@mui/lab";
+import { red } from "@mui/material/colors";
+import { useNavigate } from "@tanstack/react-router";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
+import { useSnackbar } from "notistack";
+import SettingOption from "../settingOption";
 
 const motionConfig = {
 	initial: {
@@ -64,10 +61,14 @@ const Settings = () => {
 		state.dialogOpen,
 		state.tabValue,
 	]);
-	const [api, jellyfin] = useApi((state) => [state.api, state.jellyfin]);
+	
+	const api = useApiInContext((s) => s.api);
+	const createApi = useApiInContext((s) => s.createApi);
+
 	const systemInfo = useQuery({
 		queryKey: ["about", "systemInfo"],
 		queryFn: async () => {
+			if (!api) return null;
 			const result = await getSystemApi(api).getSystemInfo();
 			return result.data;
 		},
@@ -77,10 +78,7 @@ const Settings = () => {
 	const navigate = useNavigate();
 	const { enqueueSnackbar } = useSnackbar();
 
-	const [applicationVersion, serversOnDiskFn] = useCentralStore((state) => [
-		state.clientVersion,
-		state.allServersOnDisk,
-	]);
+	const [applicationVersion] = useCentralStore((state) => [state.clientVersion]);
 
 	const serversOnDisk = useQuery({
 		queryKey: ["settings", "serversOnDisk"],
@@ -90,7 +88,7 @@ const Settings = () => {
 
 	const updateInfo = useQuery({
 		queryKey: ["about", "updater"],
-		queryFn: async () => await checkUpdate(),
+		queryFn: async () => await check(),
 		enabled: open,
 	});
 
@@ -103,24 +101,20 @@ const Settings = () => {
 	const queryClient = useQueryClient();
 
 	const [updating, setUpdating] = useState(false);
-	const [serverState, setServerState] = useState();
-	const [ask, setAsk] = useState(false);
-	const [action, setAction] = useState(null);
 	const [addServerDialog, setAddServerDialog] = useState(false);
 	const [serverIp, setServerIp] = useState("");
 
 	const handleServerChange = useMutation({
-		mutationFn: async () => {
+		mutationFn: async (server: RecommendedServerInfo) => {
 			await delUser();
-			await setDefaultServer(serverState.id);
+			await setDefaultServer(server.systemInfo?.Id ?? "");
 			await defaultServer.refetch();
-			createApi(serverState.address, null);
+			createApi(server.address, undefined);
 			queryClient.removeQueries();
 		},
 		onSuccess: async () => {
-			setAsk(false);
 			setSettingsDialogOpen(false);
-			navigate("/login/index");
+			navigate({ to: "/login" });
 		},
 		onError: (error) => {
 			console.error(error);
@@ -130,29 +124,31 @@ const Settings = () => {
 		},
 	});
 
-	const handleDelete = async (server: RecommendedServerInfo) => {
-		await delServer(server.id);
+	const handleDelete = useMutation({
+		mutationKey: ["server-delete"],
+		mutationFn: async (server: RecommendedServerInfo) => {
+			await delServer(server.systemInfo?.Id ?? "");
 
-		if (server.id === defaultServer.data) {
-			await delUser();
-			await serversOnDisk.refetch();
+			if (server.systemInfo?.Id === defaultServer.data) {
+				await delUser();
+				await serversOnDisk.refetch();
 
-			if (serversOnDisk.data.length > 0) {
-				setDefaultServer(serversOnDisk.data[0].id);
-				createApi(serversOnDisk.data[0].address, null);
-			} else {
-				// Reset Api as no server is present on disk
-				useApi.setState(useApi.getInitialState());
+				if (serversOnDisk.data?.length) {
+					setDefaultServer(serversOnDisk.data[0].id);
+					createApi(serversOnDisk.data[0].address, undefined);
+				} else {
+					// TODO: Reset api in context
+					// useApi.setState(useApi.getInitialState());
+				}
+				setSettingsDialogOpen(false);
+				await queryClient.removeQueries();
+				navigate({ to: "/" });
 			}
-			setSettingsDialogOpen(false);
-			queryClient.removeQueries();
-			navigate("/");
-		}
-		enqueueSnackbar("Server deleted successfully!", { variant: "success" });
-		setAsk(false);
-		await serversOnDisk.refetch();
-		await defaultServer.refetch();
-	};
+			enqueueSnackbar("Server deleted successfully!", { variant: "success" });
+			await serversOnDisk.refetch();
+			await defaultServer.refetch();
+		},
+	});
 
 	const addServer = useMutation({
 		mutationFn: async () => {
@@ -163,7 +159,7 @@ const Settings = () => {
 		},
 		onSuccess: async (bestServer) => {
 			if (bestServer) {
-				await setServer(bestServer.systemInfo.Id, bestServer);
+				await setServer(bestServer.systemInfo?.Id ?? "", bestServer);
 				setAddServerDialog(false);
 				enqueueSnackbar(
 					"Client added successfully. You might need to refresh client list.",
@@ -188,24 +184,37 @@ const Settings = () => {
 		},
 	});
 
+	// Memoize PaperProps to prevent unnecessary re-renders
+	const paperProps = useMemo(
+		() => ({
+			className: "settings glass",
+			elevation: 10,
+		}),
+		[],
+	);
+
+	// Memoize onClose function to prevent unnecessary re-renders
+	const handleClose = useCallback(() => {
+		setSettingsDialogOpen(false);
+	}, []);
+
 	return (
 		<Dialog
 			open={open}
 			fullWidth
 			maxWidth="md"
-			PaperProps={{
-				className: "settings",
-			}}
-			onClose={() => setSettingsDialogOpen(false)}
+			PaperProps={paperProps}
+			hideBackdrop
+			onClose={handleClose}
 		>
 			<Tabs
 				orientation="vertical"
 				value={tabValue}
-				onChange={(e, newValue) => {
+				onChange={(_, newValue) => {
 					setSettingsTabValue(newValue);
 				}}
 				style={{
-					borderRight: "1.2px solid rgb(255 255 255 / 0.1)",
+					background: "rgb(0 0 0 / 0.4)",
 				}}
 			>
 				<Tab
@@ -258,246 +267,9 @@ const Settings = () => {
 					{/* General */}
 					{tabValue === 1 && (
 						<div className="settings-container">
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
-							<FormControlLabel
-								value="start"
-								control={<Switch color="primary" />}
-								label={
-									<div className="settings-option-info">
-										<Typography variant="h6" fontWeight={400}>
-											Enable DiscordRPC
-										</Typography>
-										<Typography variant="subtitle2" fontWeight={200}>
-											this a test
-										</Typography>
-									</div>
-								}
-								labelPlacement="start"
-								className="settings-option"
-							/>
+							{allSettings.general.map((setting) => (
+								<SettingOption key={setting.key} setting={setting} />
+							))}
 						</div>
 					)}
 
@@ -518,7 +290,7 @@ const Settings = () => {
 												opacity: 0,
 											}}
 											animate={{ transform: "translateY(0px)", opacity: 1 }}
-											exit={{ transform: "translateY(-10px)", opacity: 1 }}
+											exit={{ transform: "translateY(-10px)", opacity: 0 }}
 											transition={{
 												delay: 0.1 * index,
 												duration: 0.15,
@@ -579,9 +351,7 @@ const Settings = () => {
 														fontSize: "1.64em",
 													}}
 													onClick={() => {
-														setAsk(true);
-														setAction("change-server");
-														setServerState(server);
+														handleServerChange.mutate(server);
 													}}
 													disabled={handleServerChange.isPending}
 												>
@@ -595,9 +365,7 @@ const Settings = () => {
 													}}
 													disabled={handleServerChange.isPending}
 													onClick={() => {
-														setAsk(true);
-														setAction("delete-server");
-														setServerState(server);
+														handleDelete.mutate(server);
 													}}
 												>
 													<div className="material-symbols-rounded">
@@ -646,41 +414,62 @@ const Settings = () => {
 					{/* About */}
 					{tabValue === 10 && (
 						<div className="settings-container settings-about">
-							<img src={logo} className="settings-logo" alt="JellyPlayer" />
+							<img src={logo} className="settings-logo" alt="Blink" />
 							<div className="settings-grid">
 								<div className="settings-info-container">
 									<div className="settings-info">
-										<Typography>Client Version:</Typography>
+										<Typography variant="subtitle2">Client Version:</Typography>
 										<Chip
 											icon={
-												<span className="material-symbols-rounded">
-													{updateInfo.data?.shouldUpdate
-														? "update"
-														: "update_disabled"}
+												<span
+													className="material-symbols-rounded"
+													// style={{ "--wght": 500 }}
+												>
+													{updateInfo.data?.available
+														? "release_alert"
+														: "new_releases"}
 												</span>
 											}
 											label={
-												<Typography variant="subtitle1">
+												<Typography variant="subtitle2">
 													{applicationVersion}
 												</Typography>
 											}
-											color={
-												updateInfo.data?.shouldUpdate ? "error" : "success"
-											}
-											size="medium"
+											color={updateInfo.data?.available ? "error" : "success"}
+											size="small"
 											style={{
 												width: "fit-content !important",
 											}}
 										/>
 									</div>
 									<div className="settings-info">
-										<Typography>Update Available:</Typography>
-										<Typography>
-											{updateInfo.isFetching
-												? "Checking for new updates..."
-												: updateInfo.data?.shouldUpdate
-												  ? updateInfo.data.manifest?.version
-												  : "No update found."}
+										<Typography variant="subtitle2">
+											Update Available:
+										</Typography>
+										<Typography variant="subtitle2">
+											{updateInfo.isFetching ? (
+												"Checking for new updates..."
+											) : updateInfo.data?.available ? (
+												<Chip
+													icon={
+														<span className="material-symbols-rounded">
+															new_releases
+														</span>
+													}
+													label={
+														<Typography variant="subtitle2">
+															{applicationVersion}
+														</Typography>
+													}
+													color="success"
+													size="small"
+													style={{
+														width: "fit-content !important",
+													}}
+												/>
+											) : (
+												"No update found."
+											)}
 										</Typography>
 									</div>
 									<LoadingButton
@@ -689,14 +478,14 @@ const Settings = () => {
 										}}
 										loading={updateInfo.isFetching || updating}
 										variant="contained"
-										disabled={!updateInfo.data?.shouldUpdate}
+										disabled={!updateInfo.data?.available}
 										loadingPosition="start"
 										onClick={async () => {
-											if (updateInfo.data?.shouldUpdate) {
+											if (updateInfo.data?.available) {
 												setUpdating(true);
-												await installUpdate();
+												await updateInfo.data?.downloadAndInstall();
 												enqueueSnackbar(
-													"Update has been installed! You need to relaunch JellyPlayer.",
+													"Update has been installed! You need to relaunch Blink.",
 													{
 														variant: "success",
 													},
@@ -707,30 +496,32 @@ const Settings = () => {
 									>
 										{updateInfo.isFetching
 											? "Checking for Update..."
-											: updateInfo.data?.shouldUpdate
-											  ? "Update"
-											  : "No Update Found"}
+											: updateInfo.data?.available
+												? "Update"
+												: "No Update Found"}
 									</LoadingButton>
 								</div>
 								{systemInfo.isSuccess ? (
 									<div className="settings-info-container">
 										<div className="settings-info">
-											<Typography>Server:</Typography>
-											<Typography>{systemInfo.data?.ServerName}</Typography>
-										</div>
-										<div className="settings-info">
-											<Typography>Jellyfin Version:</Typography>
-											<Typography>{systemInfo.data?.Version}</Typography>
-										</div>
-										<div className="settings-info">
-											<Typography>Operating System:</Typography>
-											<Typography>
-												{systemInfo.data?.OperatingSystemDisplayName}
+											<Typography variant="subtitle2">Server:</Typography>
+											<Typography variant="subtitle2">
+												{systemInfo.data?.ServerName}
 											</Typography>
 										</div>
 										<div className="settings-info">
-											<Typography>Server Architecture:</Typography>
-											<Typography>
+											<Typography variant="subtitle2">
+												Jellyfin Version:
+											</Typography>
+											<Typography variant="subtitle2">
+												{systemInfo.data?.Version}
+											</Typography>
+										</div>
+										<div className="settings-info">
+											<Typography variant="subtitle2">
+												Server Architecture:
+											</Typography>
+											<Typography variant="subtitle2">
 												{systemInfo.data?.SystemArchitecture}
 											</Typography>
 										</div>
@@ -751,10 +542,9 @@ const Settings = () => {
 									background: "rgb(0 0 0 / 0.3)",
 									padding: "1em",
 									borderRadius: "10px",
-									border: "1px solid rgb(255 255 255 / 0.1)",
 								}}
 							>
-								<Typography variant="h6" fontWeight={300} mb={1}>
+								<Typography variant="subtitle1" mb={1}>
 									Links:
 								</Typography>
 								<div
@@ -765,62 +555,36 @@ const Settings = () => {
 										gap: "0.1em",
 									}}
 								>
-									<Link
+									<Typography
+										component={Link}
+										variant="subtitle2"
 										target="_blank"
-										href="https://github.com/prayag17/JellyPlayer"
+										href="https://github.com/prayag17/Blink"
 									>
-										https://github.com/prayag17/JellyPlayer
-									</Link>
-									<Link target="_blank" href="https://jellyfin.org">
+										https://github.com/prayag17/Blink
+									</Typography>
+									<Typography
+										component={Link}
+										variant="subtitle2"
+										target="_blank"
+										href="https://jellyfin.org"
+									>
 										https://jellyfin.org
-									</Link>
+									</Typography>
 								</div>
 							</div>
 						</div>
 					)}
 				</motion.div>
 			</AnimatePresence>
-			{/* Show dialog before deleting or changing server */}
-			<Dialog open={ask} fullWidth maxWidth="xs">
-				<DialogTitle>Are you sure?</DialogTitle>
-				<DialogActions
-					style={{
-						alignItems: "center",
-						justifyContent: "center",
-						padding: "1em",
-						gap: "1em",
-					}}
-				>
-					<Button
-						variant="contained"
-						color="error"
-						fullWidth
-						onClick={() => setAsk(false)}
-					>
-						No
-					</Button>
-					<Button
-						variant="contained"
-						color="success"
-						fullWidth
-						style={{
-							margin: 0,
-						}}
-						onClick={() => {
-							if (action === "change-server") {
-								handleServerChange.mutate();
-							} else if (action === "delete-server") {
-								handleDelete(serverState);
-							}
-						}}
-					>
-						yes
-					</Button>
-				</DialogActions>
-			</Dialog>
 
 			{/* Add Server */}
-			<Dialog open={addServerDialog} fullWidth>
+			<Dialog
+				open={addServerDialog}
+				fullWidth
+				hideBackdrop
+				disableScrollLock={true}
+			>
 				<DialogTitle>Add Server</DialogTitle>
 				<DialogContent className="settings-server-add">
 					<TextField
@@ -857,6 +621,7 @@ const Settings = () => {
 					>
 						Close
 					</Button>
+					{/* @ts-ignore */}
 					<LoadingButton
 						startIcon={
 							<span

@@ -52,7 +52,7 @@ jobs:
      build:
           needs: build_web
           # Prevent forked PRs from running the build job which is expensive
-          if: github.repository == 'prayag17/JellyPlayer'
+          if: github.repository == 'prayag17/Blink'
           strategy:
                fail-fast: false
                matrix:
@@ -68,7 +68,7 @@ jobs:
                  # You can remove libayatana-appindicator3-dev if you don't use the system tray feature.
                  run: |
                       sudo apt-get update
-                      sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev librsvg2-dev
+                      sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev
 
                - name: Rust setup
                  uses: dtolnay/rust-toolchain@stable
@@ -107,14 +107,16 @@ jobs:
                  run: pnpm install --no-frozen-lockfile
 
                - name: Build app
-                 run: pnpm run tauri build --bundles "deb" "appimage" "nsis" "app" "dmg"
+                 run: pnpm run tauri build --debug
                  env:
                       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                       TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
                       TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+                      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+                      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
                - name: Upload build Artifacts
                  uses: actions/upload-artifact@v4
                  with:
-                      name: JellyPlayer-${{ matrix.platform }}-dev${{ github.sha }}
-                      path: src-tauri/target/release/bundle/*
+                      name: Blink-${{ matrix.platform }}-dev${{ github.sha }}
+                      path: src-tauri/target/debug/bundle/*

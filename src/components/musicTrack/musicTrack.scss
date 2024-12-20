@@ -1,0 +1,57 @@
+
+.music-track {
+	display: grid;
+	grid-template-columns: 4.5em 80% 1fr 1fr;
+	gap: 0.5em;
+	align-items: center;
+	justify-items: center;
+	width: 100%;
+	cursor: pointer;
+	&-icon {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgb(255 255 255 / 0.09);
+		z-index: -1;
+	}
+	&-image {
+		margin: 0.4em;
+		border-radius: $border-radius_04;
+		overflow: hidden;
+		aspect-ratio: 1;
+		position: relative;
+		width: 4em;
+		box-shadow: 0 0 10px rgb(0 0 0 / 0.2);
+			transition: opacity $transition-time-default;
+		&-overlay {
+			position: absolute;
+			top: 0;
+			left: 0;
+			backdrop-filter: blur(10px);
+			width: 100%;
+			height: 100%;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			opacity: 0;
+			transition: opacity $transition-time-fast;
+		}
+	}
+	&-info {
+		justify-self: start;
+		&-lyrics {
+				margin-right: 0.4em;
+			}
+	}
+
+	&:hover {
+		.music-track-image-overlay {
+			opacity: 1;
+		}
+	}
+}

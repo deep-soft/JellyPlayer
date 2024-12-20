@@ -1,4 +1,4 @@
-import { MediaUrl } from "@jellyfin/sdk/lib/generated-client";
+import type { MediaUrl } from "@jellyfin/sdk/lib/generated-client";
 import { Dialog, IconButton } from "@mui/material";
 import React, { useState } from "react";
 import ReactPlayer from "react-player";
@@ -11,7 +11,7 @@ type TrailerButtonType = {
 const TrailerButton = (props: TrailerButtonType) => {
 	const [dialog, setDialog] = useState(false);
 	return (
-		<>
+		<div>
 			<IconButton
 				disabled={props.disabled ?? false}
 				onClick={() => setDialog(true)}
@@ -29,18 +29,20 @@ const TrailerButton = (props: TrailerButtonType) => {
 				}}
 				onClose={() => setDialog(false)}
 			>
-				<ReactPlayer
-					playing={false}
-					url={props.trailerItem[0]?.Url}
-					width="100%"
-					height="auto"
-					style={{
-						aspectRatio: "16/9",
-					}}
-					controls
-				/>
+				{props.trailerItem[0]?.Url && (
+					<ReactPlayer
+						playing={false}
+						url={props.trailerItem[0]?.Url}
+						width="100%"
+						height="auto"
+						style={{
+							aspectRatio: "16/9",
+						}}
+						controls
+					/>
+				)}
 			</Dialog>
-		</>
+		</div>
 	);
 };
 

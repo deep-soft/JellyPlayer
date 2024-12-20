@@ -23,5 +23,10 @@
 		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"rust-analyzer.linkedProjects": ["./src-tauri/Cargo.toml"],
-	"typescript.tsdk": "node_modules/typescript/lib"
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"[scss]": {
+		"editor.defaultFormatter": "vscode.css-language-features"
+	},
+	"millionLint.theme": "million",
+	"millionLint.disableOutdatedVersionMessage": true
 }
